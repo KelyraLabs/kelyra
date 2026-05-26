@@ -39,6 +39,29 @@ describe('security policy', () => {
     assert.equal(verdict.risk, 'block');
   });
 
+  it('blocks sensitive control files inside subdirectories', () => {
+    for (const path of [
+      'config/.env',
+      'nested/.npmrc',
+      'repo/.git/config',
+      'repo/.ssh/config',
+    ]) {
+      assert.equal(classifyActionRisk(action(path)).risk, 'block', path);
+    }
+  });
+
+  it('requires confirmation for nested command surfaces', () => {
+    for (const path of [
+      'packages/web/package.json',
+      'tools/Dockerfile',
+      'apps/site/.github/workflows/deploy.yml',
+      'packages/api/scripts/deploy.sh',
+    ]) {
+      assert.equal(classifyActionRisk(action(path)).risk, 'confirm', path);
+      assert.equal(touchesCommandSurface([action(path)]), true, path);
+    }
+  });
+
   it('separates safe, confirm, and blocked actions', () => {
     const review = reviewActions([
       action('src/ok.ts'),

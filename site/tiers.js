@@ -43,6 +43,7 @@ const fallbackTiers = {
       minimum: '5,000,000 KELYRA minimum',
       tokenMinimum: '5000000',
       dailyQuota: { oracleMessages: 25, dataCalls: 150, buildActions: 3, proofJobs: 6 },
+      freshDailyQuota: { oracleMessages: 15, dataCalls: 50, buildActions: 1, proofJobs: 2 },
     },
     {
       id: 'core',
@@ -51,6 +52,7 @@ const fallbackTiers = {
       minimum: '50,000,000 KELYRA minimum',
       tokenMinimum: '50000000',
       dailyQuota: { oracleMessages: 100, dataCalls: 400, buildActions: 10, proofJobs: 25 },
+      freshDailyQuota: { oracleMessages: 50, dataCalls: 100, buildActions: 3, proofJobs: 8 },
     },
     {
       id: 'pro',
@@ -59,6 +61,7 @@ const fallbackTiers = {
       minimum: '100,000,000 KELYRA minimum',
       tokenMinimum: '100000000',
       dailyQuota: { oracleMessages: 200, dataCalls: 800, buildActions: 25, proofJobs: 80 },
+      freshDailyQuota: { oracleMessages: 50, dataCalls: 250, buildActions: 5, proofJobs: 20 },
     },
     {
       id: 'ultimate',
@@ -67,6 +70,7 @@ const fallbackTiers = {
       minimum: '1,000,000,000 KELYRA minimum',
       tokenMinimum: '1000000000',
       dailyQuota: { oracleMessages: 750, dataCalls: 2500, buildActions: 75, proofJobs: 300 },
+      freshDailyQuota: { oracleMessages: 150, dataCalls: 500, buildActions: 10, proofJobs: 50 },
     },
   ],
 };
@@ -80,6 +84,19 @@ const formatValue = (value) => {
 
 function quotaLabel(types, id) {
   return types.find((item) => item.id === id)?.label || id;
+}
+
+function appendQuotaBlock(card, title, quota, types) {
+  const block = document.createElement('section');
+  block.className = 'tier-quota-block';
+  block.innerHTML = `<h4>${title}</h4><dl></dl>`;
+  const list = block.querySelector('dl');
+  for (const key of Object.keys(quota || {})) {
+    const row = document.createElement('div');
+    row.innerHTML = `<dt>${quotaLabel(types, key)}</dt><dd>${formatValue(quota[key])}</dd>`;
+    list.append(row);
+  }
+  card.append(block);
 }
 
 function renderTiers(config) {
@@ -98,15 +115,10 @@ function renderTiers(config) {
         <p>${tier.access}</p>
         <small>${tier.minimum}</small>
       </div>
-      <dl></dl>
     `;
 
-    const list = card.querySelector('dl');
-    for (const key of Object.keys(tier.dailyQuota || {})) {
-      const row = document.createElement('div');
-      row.innerHTML = `<dt>${quotaLabel(types, key)}</dt><dd>${formatValue(tier.dailyQuota[key])}</dd>`;
-      list.append(row);
-    }
+    appendQuotaBlock(card, 'Full daily quota', tier.dailyQuota || {}, types);
+    appendQuotaBlock(card, 'Fresh daily quota', tier.freshDailyQuota || tier.dailyQuota || {}, types);
     grid.append(card);
   }
 }
