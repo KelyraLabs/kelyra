@@ -899,7 +899,7 @@ function responseHeaders(config, req, extra = {}) {
 
 function staticHeaders(contentType) {
   return {
-    'cache-control': contentType.startsWith('text/html') ? 'no-store' : 'public, max-age=300',
+    'cache-control': 'no-store, max-age=0',
     'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
     'content-type': contentType,
     'referrer-policy': 'no-referrer',
