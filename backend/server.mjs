@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createPublicClient, erc20Abi, http, isAddress, parseUnits, verifyMessage } from 'viem';
+import { createPublicClient, erc20Abi, formatUnits, http, isAddress, parseUnits, verifyMessage } from 'viem';
 import { base } from 'viem/chains';
 
 const moduleDir = fileURLToPath(new URL('.', import.meta.url));
@@ -61,20 +61,28 @@ function numericEnv(env, key, fallback) {
 }
 
 function buildTierConfig(env, rateLimitPerMinute) {
+  const tokenSymbol = env.KELYRA_TIER_TOKEN_SYMBOL || 'KELYRA';
   const publicOracle = numericEnv(env, 'KELYRA_PUBLIC_ORACLE_DAILY', 12);
   const publicData = numericEnv(env, 'KELYRA_PUBLIC_DATA_DAILY', 40);
   const launchOracle = numericEnv(env, 'KELYRA_LAUNCH_ORACLE_DAILY', 60);
   const launchData = numericEnv(env, 'KELYRA_LAUNCH_DATA_DAILY', 300);
   const launchBuild = numericEnv(env, 'KELYRA_LAUNCH_BUILD_DAILY', 6);
   const launchProof = numericEnv(env, 'KELYRA_LAUNCH_PROOF_DAILY', 12);
+  const builderTokenMinimum = env.KELYRA_BUILDER_TOKEN_MIN || '50000';
+  const teamTokenMinimum = env.KELYRA_TEAM_TOKEN_MIN || '250000';
+  const scaleTokenMinimum = env.KELYRA_SCALE_TOKEN_MIN || '1000000';
 
   const config = {
     schema: 'kelyra.tiers.v1',
     quotaWindow: 'UTC day',
     defaultTierId: env.KELYRA_DEFAULT_TIER_ID || 'launch',
     accessCodeTierId: env.KELYRA_ACCESS_CODE_TIER_ID || 'launch',
-    walletTierId: env.KELYRA_WALLET_TIER_ID || 'builder',
     anonymousTierId: 'public',
+    token: {
+      chainId: BASE_CHAIN_ID,
+      symbol: tokenSymbol,
+      address: env.KELYRA_TOKEN_ADDRESS || null,
+    },
     quotaTypes: [
       {
         id: 'oracleMessages',
@@ -120,8 +128,9 @@ function buildTierConfig(env, rateLimitPerMinute) {
       {
         id: 'launch',
         name: 'Launch',
-        access: 'Beta access code or approved wallet',
-        minimum: 'Controlled beta access, no asset minimum',
+        access: 'Beta access code while launch access is controlled',
+        minimum: 'Internal beta access, not a public wallet tier',
+        tokenMinimum: null,
         dailyQuota: {
           oracleMessages: launchOracle,
           dataCalls: launchData,
@@ -132,8 +141,9 @@ function buildTierConfig(env, rateLimitPerMinute) {
       {
         id: 'builder',
         name: 'Builder',
-        access: 'Verified wallet or promoted beta seat',
-        minimum: 'Configured by the operator when token gating is enabled',
+        access: `Wallet holding at least ${formatTokenAmount(builderTokenMinimum)} ${tokenSymbol}`,
+        minimum: `${formatTokenAmount(builderTokenMinimum)} ${tokenSymbol} minimum`,
+        tokenMinimum: builderTokenMinimum,
         dailyQuota: {
           oracleMessages: numericEnv(env, 'KELYRA_BUILDER_ORACLE_DAILY', 200),
           dataCalls: numericEnv(env, 'KELYRA_BUILDER_DATA_DAILY', 1200),
@@ -144,8 +154,9 @@ function buildTierConfig(env, rateLimitPerMinute) {
       {
         id: 'team',
         name: 'Team',
-        access: 'Team workspace with shared policies and proof history',
-        minimum: 'Configured by contract, allowlist, or billing seat',
+        access: `Wallet holding at least ${formatTokenAmount(teamTokenMinimum)} ${tokenSymbol}`,
+        minimum: `${formatTokenAmount(teamTokenMinimum)} ${tokenSymbol} minimum`,
+        tokenMinimum: teamTokenMinimum,
         dailyQuota: {
           oracleMessages: numericEnv(env, 'KELYRA_TEAM_ORACLE_DAILY', 600),
           dataCalls: numericEnv(env, 'KELYRA_TEAM_DATA_DAILY', 4000),
@@ -156,8 +167,9 @@ function buildTierConfig(env, rateLimitPerMinute) {
       {
         id: 'scale',
         name: 'Scale',
-        access: 'Dedicated deployment or contracted workspace',
-        minimum: 'Custom',
+        access: `Wallet holding at least ${formatTokenAmount(scaleTokenMinimum)} ${tokenSymbol}`,
+        minimum: `${formatTokenAmount(scaleTokenMinimum)} ${tokenSymbol} minimum`,
+        tokenMinimum: scaleTokenMinimum,
         dailyQuota: {
           oracleMessages: numericEnv(env, 'KELYRA_SCALE_ORACLE_DAILY', 2000),
           dataCalls: numericEnv(env, 'KELYRA_SCALE_DATA_DAILY', 15000),
@@ -185,6 +197,20 @@ function buildTierConfig(env, rateLimitPerMinute) {
   }
 }
 
+function tokenTiersFromConfig(tierConfig) {
+  return (tierConfig.tiers || [])
+    .filter((tier) => tier.tokenMinimum !== null && tier.tokenMinimum !== undefined && String(tier.tokenMinimum).trim() !== '')
+    .map((tier) => ({ ...tier, tokenMinimum: String(tier.tokenMinimum).trim() }));
+}
+
+function lowestTokenMinimum(tierConfig) {
+  const tiers = tokenTiersFromConfig(tierConfig);
+  if (tiers.length === 0) return '0';
+  return tiers
+    .map((tier) => String(tier.tokenMinimum))
+    .sort((a, b) => Number(a) - Number(b))[0] || '0';
+}
+
 export function loadConfig(env = process.env) {
   const environment = env.NODE_ENV || 'development';
   const production = environment === 'production';
@@ -197,6 +223,7 @@ export function loadConfig(env = process.env) {
   const staticDir = resolve(env.KELYRA_STATIC_DIR || join(packageRoot, 'site'));
   const tokenAddress = env.KELYRA_TOKEN_ADDRESS || '';
   const rateLimitPerMinute = Number(env.KELYRA_RATE_LIMIT_PER_MINUTE || 80);
+  const tierConfig = buildTierConfig(env, rateLimitPerMinute);
 
   if (apiSecret.length < 32) {
     throw new Error('KELYRA_API_SECRET must be at least 32 characters.');
@@ -231,9 +258,9 @@ export function loadConfig(env = process.env) {
     sessionTtlSeconds: Number(env.KELYRA_SESSION_TTL_SECONDS || DEFAULT_SESSION_TTL_SECONDS),
     staticDir,
     storeDir,
-    tierConfig: buildTierConfig(env, rateLimitPerMinute),
+    tierConfig,
     tokenAddress,
-    tokenMinBalance: env.KELYRA_TOKEN_MIN_BALANCE || '1',
+    tokenMinBalance: env.KELYRA_TOKEN_MIN_BALANCE || lowestTokenMinimum(tierConfig),
     walletAuthDomain: env.KELYRA_WALLET_AUTH_DOMAIN || 'Kelyra Console',
   };
 }
@@ -509,6 +536,35 @@ function buildAuthNonce(config, address) {
   };
 }
 
+function formatTokenAmount(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return '0';
+  const number = Number(text);
+  if (!Number.isFinite(number)) return text;
+  return number.toLocaleString(undefined, { maximumFractionDigits: 6 });
+}
+
+function tokenThresholds(config) {
+  const symbol = config.tierConfig.token?.symbol || 'KELYRA';
+  return tokenTiersFromConfig(config.tierConfig).map((tier) => ({
+    tierId: tier.id,
+    tierName: tier.name,
+    tokenMinimum: tier.tokenMinimum,
+    label: `${formatTokenAmount(tier.tokenMinimum)} ${symbol}`,
+  }));
+}
+
+function tokenTierForBalance(config, balance, decimals) {
+  const tiers = tokenTiersFromConfig(config.tierConfig)
+    .map((tier) => ({
+      tier,
+      minimumRaw: parseUnits(String(tier.tokenMinimum), decimals),
+    }))
+    .sort((a, b) => a.minimumRaw > b.minimumRaw ? -1 : a.minimumRaw < b.minimumRaw ? 1 : 0);
+
+  return tiers.find((item) => balance >= item.minimumRaw) || null;
+}
+
 async function tokenHolderStatus(config, address) {
   if (!config.requireTokenHolder) {
     return {
@@ -516,6 +572,7 @@ async function tokenHolderStatus(config, address) {
       ok: true,
       chainId: BASE_CHAIN_ID,
       tokenAddress: config.tokenAddress,
+      thresholds: tokenThresholds(config),
     };
   }
 
@@ -546,17 +603,25 @@ async function tokenHolderStatus(config, address) {
       functionName: 'symbol',
     }).catch(() => 'TOKEN'),
   ]);
+  const matched = tokenTierForBalance(config, balance, decimals);
   const minimum = parseUnits(config.tokenMinBalance, decimals);
+  const symbolText = String(symbol || config.tierConfig.token?.symbol || 'KELYRA');
 
   return {
     required: true,
-    ok: balance >= minimum,
+    ok: Boolean(matched) && balance >= minimum,
     chainId: BASE_CHAIN_ID,
     tokenAddress: config.tokenAddress,
-    symbol,
+    symbol: symbolText,
     decimals,
     balance: balance.toString(),
+    balanceFormatted: formatTokenAmount(formatUnits(balance, decimals)),
     minimum: minimum.toString(),
+    minimumFormatted: `${formatTokenAmount(config.tokenMinBalance)} ${symbolText}`,
+    thresholds: tokenThresholds(config),
+    tierId: matched?.tier.id || null,
+    tierName: matched?.tier.name || null,
+    tierMinimum: matched ? `${formatTokenAmount(matched.tier.tokenMinimum)} ${symbolText}` : null,
   };
 }
 
@@ -1082,13 +1147,20 @@ function publicTierConfig(config) {
     accessCodeBeta: true,
     tokenGate: config.requireTokenHolder
       ? {
-          required: true,
-          chainId: BASE_CHAIN_ID,
-          tokenAddress: config.tokenAddress,
-          minimum: config.tokenMinBalance,
-        }
-      : { required: false },
-  };
+	          required: true,
+	          chainId: BASE_CHAIN_ID,
+	          tokenAddress: config.tokenAddress,
+	          symbol: config.tierConfig.token?.symbol || 'KELYRA',
+	          minimum: config.tokenMinBalance,
+	          minimumLabel: `${formatTokenAmount(config.tokenMinBalance)} ${config.tierConfig.token?.symbol || 'KELYRA'}`,
+	          thresholds: tokenThresholds(config),
+	        }
+	      : {
+	          required: false,
+	          symbol: config.tierConfig.token?.symbol || 'KELYRA',
+	          thresholds: tokenThresholds(config),
+	        },
+	  };
 
   return {
     ...config.tierConfig,
@@ -1108,7 +1180,6 @@ function tierById(config, tierId) {
 function tierForSession(config, session) {
   if (!session) return tierById(config, config.tierConfig.anonymousTierId || 'public');
   if (session.tierId) return tierById(config, session.tierId);
-  if (session.authMode === 'wallet') return tierById(config, config.tierConfig.walletTierId);
   if (session.authMode === 'access-code') return tierById(config, config.tierConfig.accessCodeTierId);
   return tierById(config, config.tierConfig.defaultTierId);
 }
@@ -1756,6 +1827,7 @@ export function createKelyraApiServer(options = {}) {
   const config = options.config || loadConfig(options.env);
   const store = options.store || createStore(config);
   const rateLimit = createRateLimiter(config);
+  const resolveTokenHolderStatus = options.tokenHolderStatus || tokenHolderStatus;
 
   const server = createServer(async (req, res) => {
     try {
@@ -1828,9 +1900,14 @@ export function createKelyraApiServer(options = {}) {
           authenticated: Boolean(session),
           authMode: 'access-code-beta+wallet',
           session: session ? {
-            sub: session.sub,
-            authMode: session.authMode || 'access-code',
-            wallet: session.wallet || null,
+	            sub: session.sub,
+	            authMode: session.authMode || 'access-code',
+	            tierId: session.tierId || tierForSession(config, session)?.id || null,
+	            tier: tierForSession(config, session) ? {
+	              id: tierForSession(config, session).id,
+	              name: tierForSession(config, session).name,
+	            } : null,
+	            wallet: session.wallet || null,
             tokenGate: session.tokenGate || null,
             iat: session.iat,
             exp: session.exp,
@@ -1848,9 +1925,10 @@ export function createKelyraApiServer(options = {}) {
         const now = Math.floor(Date.now() / 1000);
         const token = signSession(config, {
           sid: randomBytes(16).toString('hex'),
-          sub: 'access-code',
-          authMode: 'access-code',
-          iat: now,
+	          sub: 'access-code',
+	          authMode: 'access-code',
+	          tierId: config.tierConfig.accessCodeTierId,
+	          iat: now,
           exp: now + config.sessionTtlSeconds,
         });
         json(config, req, res, 200, { ok: true, authenticated: true }, {
@@ -1874,11 +1952,13 @@ export function createKelyraApiServer(options = {}) {
           nonce: nonceRecord.nonce,
           message: nonceRecord.message,
           expiresAt: nonceRecord.expiresAt,
-          tokenGate: {
-            required: config.requireTokenHolder,
-            tokenAddress: config.tokenAddress,
-            minimum: config.tokenMinBalance,
-          },
+	          tokenGate: {
+	            required: config.requireTokenHolder,
+	            tokenAddress: config.tokenAddress,
+	            symbol: config.tierConfig.token?.symbol || 'KELYRA',
+	            minimum: config.tokenMinBalance,
+	            thresholds: tokenThresholds(config),
+	          },
         });
         return;
       }
@@ -1910,7 +1990,7 @@ export function createKelyraApiServer(options = {}) {
           return;
         }
 
-        const tokenGate = await tokenHolderStatus(config, address).catch((err) => {
+	        const tokenGate = await resolveTokenHolderStatus(config, address).catch((err) => {
           throw Object.assign(new Error(err instanceof Error ? err.message : 'TOKEN_GATE_UNAVAILABLE'), { status: 503 });
         });
         if (!tokenGate.ok) {
@@ -1922,18 +2002,20 @@ export function createKelyraApiServer(options = {}) {
         const token = signSession(config, {
           sid: randomBytes(16).toString('hex'),
           sub: `wallet:${address}`,
-          authMode: 'wallet',
-          wallet: { address, chainId: BASE_CHAIN_ID },
-          tokenGate,
-          iat: now,
+	          authMode: 'wallet',
+	          wallet: { address, chainId: BASE_CHAIN_ID },
+	          tokenGate,
+	          tierId: tokenGate.tierId,
+	          iat: now,
           exp: now + config.sessionTtlSeconds,
         });
         json(config, req, res, 200, {
           ok: true,
           authenticated: true,
-          wallet: { address, chainId: BASE_CHAIN_ID },
-          tokenGate,
-        }, {
+	          wallet: { address, chainId: BASE_CHAIN_ID },
+	          tokenGate,
+	          tier: tokenGate.tierId ? { id: tokenGate.tierId, name: tokenGate.tierName } : null,
+	        }, {
           'set-cookie': sessionCookie(config, token),
         });
         return;

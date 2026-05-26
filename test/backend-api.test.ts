@@ -10,11 +10,15 @@ function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-async function startApi(options: { runnerMode?: string; env?: Record<string, string> } = {}) {
+async function startApi(options: {
+  runnerMode?: string;
+  env?: Record<string, string>;
+  tokenHolderStatus?: (config: any, address: string) => Promise<any>;
+} = {}) {
   const tempDir = mkdtempSync(join(tmpdir(), 'kelyra-api-'));
   const { createKelyraApiServer } = await import('../backend/server.mjs');
-  const { server, store } = createKelyraApiServer({
-    env: {
+	  const { server, store } = createKelyraApiServer({
+	    env: {
       NODE_ENV: 'test',
       KELYRA_API_SECRET: 'test-kelyra-api-secret-with-enough-length',
       KELYRA_ACCESS_CODE_SHA256: hash('test-access'),
@@ -23,6 +27,7 @@ async function startApi(options: { runnerMode?: string; env?: Record<string, str
 	      KELYRA_RUNNER_MODE: options.runnerMode || 'queue-only',
 	      ...(options.env || {}),
 	    },
+	    tokenHolderStatus: options.tokenHolderStatus,
 	  });
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -81,7 +86,9 @@ describe('Kelyra hosted API', () => {
       assert.equal(body.schema, 'kelyra.tiers.v1');
       assert.equal(body.enforced, true);
       assert.ok(body.tiers.some((tier: any) => tier.id === 'launch'));
+      assert.ok(body.tiers.some((tier: any) => tier.id === 'builder' && tier.tokenMinimum === '50000'));
       assert.ok(body.quotaTypes.some((type: any) => type.id === 'buildActions'));
+      assert.equal(body.gate.tokenGate.thresholds[0].tierId, 'builder');
     } finally {
       await api.close();
     }
@@ -131,6 +138,90 @@ describe('Kelyra hosted API', () => {
       assert.equal(sessionBody.authenticated, true);
       assert.equal(sessionBody.session.authMode, 'wallet');
       assert.equal(sessionBody.session.sub, `wallet:${account.address.toLowerCase()}`);
+    } finally {
+      await api.close();
+    }
+  });
+
+  it('assigns wallet tiers from token-holder balance metadata', async () => {
+    const api = await startApi({
+      env: {
+        KELYRA_REQUIRE_TOKEN_HOLDER: 'true',
+        KELYRA_TOKEN_ADDRESS: '0x4200000000000000000000000000000000000006',
+        KELYRA_TEAM_BUILD_DAILY: '1',
+      },
+      tokenHolderStatus: async (config) => ({
+        required: true,
+        ok: true,
+        chainId: 8453,
+        tokenAddress: config.tokenAddress,
+        symbol: 'KELYRA',
+        decimals: 18,
+        balance: '300000000000000000000000',
+        balanceFormatted: '300,000',
+        minimum: '50000000000000000000000',
+        minimumFormatted: '50,000 KELYRA',
+        thresholds: [
+          { tierId: 'builder', tierName: 'Builder', tokenMinimum: '50000', label: '50,000 KELYRA' },
+          { tierId: 'team', tierName: 'Team', tokenMinimum: '250000', label: '250,000 KELYRA' },
+          { tierId: 'scale', tierName: 'Scale', tokenMinimum: '1000000', label: '1,000,000 KELYRA' },
+        ],
+        tierId: 'team',
+        tierName: 'Team',
+        tierMinimum: '250,000 KELYRA',
+      }),
+    });
+    try {
+      const account = privateKeyToAccount(generatePrivateKey());
+      const nonce = await fetch(`${api.baseUrl}/api/auth/wallet/nonce`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://127.0.0.1:4340',
+        },
+        body: JSON.stringify({ address: account.address }),
+      });
+      const nonceBody = await nonce.json();
+      assert.equal(nonce.status, 200);
+      assert.equal(nonceBody.tokenGate.thresholds.length, 3);
+
+      const signature = await account.signMessage({ message: nonceBody.message });
+      const verified = await fetch(`${api.baseUrl}/api/auth/wallet/verify`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://127.0.0.1:4340',
+        },
+        body: JSON.stringify({
+          address: account.address,
+          message: nonceBody.message,
+          signature,
+        }),
+      });
+      const verifiedBody = await verified.json();
+      assert.equal(verified.status, 200);
+      assert.equal(verifiedBody.tier.id, 'team');
+      assert.equal(verifiedBody.tokenGate.tierId, 'team');
+
+      const cookie = verified.headers.get('set-cookie') || '';
+      const session = await fetch(`${api.baseUrl}/api/auth/session`, {
+        headers: { cookie },
+      });
+      const sessionBody = await session.json();
+      assert.equal(sessionBody.session.tierId, 'team');
+
+      const created = await fetch(`${api.baseUrl}/api/apps/build`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          cookie,
+          origin: 'http://127.0.0.1:4340',
+        },
+        body: JSON.stringify({ prompt: 'Build a holder-tier proof dashboard' }),
+      });
+      assert.equal(created.status, 201);
+      assert.equal(created.headers.get('x-kelyra-quota-tier'), 'team');
+      assert.equal(created.headers.get('x-kelyra-quota-remaining'), '0');
     } finally {
       await api.close();
     }
