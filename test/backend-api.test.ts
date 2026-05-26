@@ -85,10 +85,11 @@ describe('Kelyra hosted API', () => {
       assert.equal(body.ok, true);
       assert.equal(body.schema, 'kelyra.tiers.v1');
       assert.equal(body.enforced, true);
-      assert.ok(body.tiers.some((tier: any) => tier.id === 'launch'));
-      assert.ok(body.tiers.some((tier: any) => tier.id === 'builder' && tier.tokenMinimum === '50000'));
+      assert.equal(body.tiers.length, 4);
+      assert.ok(body.tiers.some((tier: any) => tier.id === 'basic' && tier.tokenMinimum === '5000000'));
+      assert.ok(body.tiers.some((tier: any) => tier.id === 'ultimate' && tier.tokenMinimum === '1000000000'));
       assert.ok(body.quotaTypes.some((type: any) => type.id === 'buildActions'));
-      assert.equal(body.gate.tokenGate.thresholds[0].tierId, 'builder');
+      assert.equal(body.gate.tokenGate.thresholds[0].tierId, 'basic');
     } finally {
       await api.close();
     }
@@ -148,7 +149,7 @@ describe('Kelyra hosted API', () => {
       env: {
         KELYRA_REQUIRE_TOKEN_HOLDER: 'true',
         KELYRA_TOKEN_ADDRESS: '0x4200000000000000000000000000000000000006',
-        KELYRA_TEAM_BUILD_DAILY: '1',
+        KELYRA_PRO_BUILD_DAILY: '1',
       },
       tokenHolderStatus: async (config) => ({
         required: true,
@@ -157,18 +158,19 @@ describe('Kelyra hosted API', () => {
         tokenAddress: config.tokenAddress,
         symbol: 'KELYRA',
         decimals: 18,
-        balance: '300000000000000000000000',
-        balanceFormatted: '300,000',
-        minimum: '50000000000000000000000',
-        minimumFormatted: '50,000 KELYRA',
+        balance: '120000000000000000000000000',
+        balanceFormatted: '120,000,000',
+        minimum: '5000000000000000000000000',
+        minimumFormatted: '5,000,000 KELYRA',
         thresholds: [
-          { tierId: 'builder', tierName: 'Builder', tokenMinimum: '50000', label: '50,000 KELYRA' },
-          { tierId: 'team', tierName: 'Team', tokenMinimum: '250000', label: '250,000 KELYRA' },
-          { tierId: 'scale', tierName: 'Scale', tokenMinimum: '1000000', label: '1,000,000 KELYRA' },
+          { tierId: 'basic', tierName: 'Basic', tokenMinimum: '5000000', label: '5,000,000 KELYRA' },
+          { tierId: 'core', tierName: 'Core', tokenMinimum: '50000000', label: '50,000,000 KELYRA' },
+          { tierId: 'pro', tierName: 'Pro', tokenMinimum: '100000000', label: '100,000,000 KELYRA' },
+          { tierId: 'ultimate', tierName: 'Ultimate', tokenMinimum: '1000000000', label: '1,000,000,000 KELYRA' },
         ],
-        tierId: 'team',
-        tierName: 'Team',
-        tierMinimum: '250,000 KELYRA',
+        tierId: 'pro',
+        tierName: 'Pro',
+        tierMinimum: '100,000,000 KELYRA',
       }),
     });
     try {
@@ -183,7 +185,7 @@ describe('Kelyra hosted API', () => {
       });
       const nonceBody = await nonce.json();
       assert.equal(nonce.status, 200);
-      assert.equal(nonceBody.tokenGate.thresholds.length, 3);
+      assert.equal(nonceBody.tokenGate.thresholds.length, 4);
 
       const signature = await account.signMessage({ message: nonceBody.message });
       const verified = await fetch(`${api.baseUrl}/api/auth/wallet/verify`, {
@@ -200,15 +202,15 @@ describe('Kelyra hosted API', () => {
       });
       const verifiedBody = await verified.json();
       assert.equal(verified.status, 200);
-      assert.equal(verifiedBody.tier.id, 'team');
-      assert.equal(verifiedBody.tokenGate.tierId, 'team');
+      assert.equal(verifiedBody.tier.id, 'pro');
+      assert.equal(verifiedBody.tokenGate.tierId, 'pro');
 
       const cookie = verified.headers.get('set-cookie') || '';
       const session = await fetch(`${api.baseUrl}/api/auth/session`, {
         headers: { cookie },
       });
       const sessionBody = await session.json();
-      assert.equal(sessionBody.session.tierId, 'team');
+      assert.equal(sessionBody.session.tierId, 'pro');
 
       const created = await fetch(`${api.baseUrl}/api/apps/build`, {
         method: 'POST',
@@ -220,7 +222,7 @@ describe('Kelyra hosted API', () => {
         body: JSON.stringify({ prompt: 'Build a holder-tier proof dashboard' }),
       });
       assert.equal(created.status, 201);
-      assert.equal(created.headers.get('x-kelyra-quota-tier'), 'team');
+      assert.equal(created.headers.get('x-kelyra-quota-tier'), 'pro');
       assert.equal(created.headers.get('x-kelyra-quota-remaining'), '0');
     } finally {
       await api.close();
@@ -369,7 +371,7 @@ describe('Kelyra hosted API', () => {
   });
 
   it('enforces the daily Forge build quota for authenticated sessions', async () => {
-    const api = await startApi({ env: { KELYRA_LAUNCH_BUILD_DAILY: '1' } });
+    const api = await startApi({ env: { KELYRA_BASIC_BUILD_DAILY: '1' } });
     try {
       const cookie = await login(api.baseUrl);
       const headers = {
@@ -395,7 +397,7 @@ describe('Kelyra hosted API', () => {
       const secondBody = await second.json();
       assert.equal(second.status, 429);
       assert.equal(secondBody.error, 'QUOTA_EXCEEDED');
-      assert.equal(secondBody.quota.tierId, 'launch');
+      assert.equal(secondBody.quota.tierId, 'basic');
       assert.equal(secondBody.quota.quotaKey, 'buildActions');
     } finally {
       await api.close();
