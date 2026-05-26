@@ -1,0 +1,20 @@
+node_modules
+dist
+*.log
+.env
+.env.*
+.DS_Store
+
+# Derivative SQLite Index (Non-authoritative)
+memory.db
+memory.db-journal
+memory.db-wal
+memory.db-shm
+
+# Local SWD trust receipts (may include prompts and provider metadata)
+.kelyra/
+.kelyra/console-runs/
+.kelyra/forge/
+.kelyra/receipts/
+.kelyra/proofs/
+.kelyra-cloud-dev/

@@ -1,0 +1,28 @@
+# Source (compiled to dist/)
+src/
+
+# Dev files
+*.ts
+!dist/**/*.d.ts
+tsconfig.json
+demo.ts
+demo-screenshot.html
+
+# Project files not needed by consumers
+.kelyraignore
+MEMORY.md
+assets/
+node_modules/
+
+# Misc
+.git
+.gitignore
+.DS_Store
+*.log
+.env
+.env.*
+
+# Database (local index)
+memory.db
+memory.db-shm
+memory.db-wal

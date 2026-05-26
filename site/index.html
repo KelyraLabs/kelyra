@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kelyra</title>
+    <meta name="description" content="Kelyra verifies agent file changes with SWD, signed receipts, policy gates, and portable proof bundles.">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="announcement">
+      <span>Verifiable agent execution, local or hosted.</span>
+      <a href="./console.html">Open Console</a>
+      <button type="button" aria-label="Dismiss announcement">×</button>
+    </div>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Kelyra home">
+        <span class="brand-k">kelyra</span>
+      </a>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="#features">Product</a>
+        <a href="./protocol.html">Protocol</a>
+        <a href="#proof">Proof</a>
+        <a href="#start">Install</a>
+        <a class="nav-pill" href="./console.html">Console</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy hero-center">
+          <pre class="hero-ascii" aria-label="Kelyra ASCII wordmark">██╗  ██╗███████╗██╗  ██╗   ██╗██████╗  █████╗
+██║ ██╔╝██╔════╝██║  ╚██╗ ██╔╝██╔══██╗██╔══██╗
+█████╔╝ █████╗  ██║   ╚████╔╝ ██████╔╝███████║
+██╔═██╗ ██╔══╝  ██║    ╚██╔╝  ██╔══██╗██╔══██║
+██║  ██╗███████╗███████╗██║   ██║  ██║██║  ██║
+╚═╝  ╚═╝╚══════╝╚══════╝╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝</pre>
+          <h1>The execution layer for agents that need proof.</h1>
+          <p class="lede">
+            Kelyra combines a local CLI, SWD verification, policy gates, proof
+            bundles, and a console surface for agent work that must be reviewed.
+          </p>
+          <div class="hero-actions">
+            <button class="command-pill" type="button" data-copy="npm install -g kelyra&#10;kelyra chat">
+              <span>$</span> npm install -g kelyra
+              <small>⧉</small>
+            </button>
+            <a class="button secondary" href="./console.html">Open Console</a>
+            <a class="button secondary" href="./protocol.html">Protocol</a>
+          </div>
+        </div>
+
+        <div class="terminal-shell" aria-label="Kelyra terminal preview">
+          <div class="terminal-top">
+            <span></span><span></span><span></span>
+            <strong>kelyra -- ~/project</strong>
+          </div>
+          <pre class="ascii" aria-hidden="true">██╗  ██╗███████╗██╗  ██╗   ██╗██████╗  █████╗
+██║ ██╔╝██╔════╝██║  ╚██╗ ██╔╝██╔══██╗██╔══██╗
+█████╔╝ █████╗  ██║   ╚████╔╝ ██████╔╝███████║
+██╔═██╗ ██╔══╝  ██║    ╚██╔╝  ██╔══██╗██╔══██║
+██║  ██╗███████╗███████╗██║   ██║  ██║██║  ██║
+╚═╝  ╚═╝╚══════╝╚══════╝╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝</pre>
+          <div class="terminal-lines">
+            <p><span class="prompt">$</span> kelyra swd apply --stdin --json</p>
+            <p><span class="ok">✔</span> Verified: PATCH src/auth.ts</p>
+            <p><span class="ok">✔</span> Receipt saved: swd-20260526-8f1c2a</p>
+            <p><span class="prompt">$</span> kelyra proof open swd-20260526-8f1c2a</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="demo" class="band demo-section">
+        <div class="section-copy narrow centered">
+          <p class="eyebrow">Verification demo</p>
+          <h2>The part worth showing is the proof layer.</h2>
+          <p>
+            Kelyra does not ask reviewers to trust a model narrative. It turns each
+            file edit into a claim, checks it against disk state, and records the outcome.
+          </p>
+        </div>
+        <div class="demo-tabs" role="tablist" aria-label="Verification demo states">
+          <button class="active" type="button" data-demo-tab="verified">Verified edit</button>
+          <button type="button" data-demo-tab="correction">Correction turn</button>
+          <button type="button" data-demo-tab="security">Security stop</button>
+        </div>
+        <div class="demo-stage">
+          <article class="demo-panel active" data-demo-panel="verified">
+            <div>
+              <p class="eyebrow">Normal edit</p>
+              <h3>A matching file action finishes with proof.</h3>
+              <p>The model proposes a PATCH, SWD applies it, hashes the result, and saves a receipt.</p>
+              <dl>
+                <div><dt>Claim</dt><dd>PATCH src/auth.ts</dd></div>
+                <div><dt>Check</dt><dd>intent and hash matched</dd></div>
+                <div><dt>Outcome</dt><dd>receipt created</dd></div>
+              </dl>
+            </div>
+            <pre><code>── SWD Verification ──
+✔ Verified: PATCH src/auth.ts
+✔ Receipt: swd-20260526-8f1c2a
+Tokens: 4,812 total via anthropic
+Budget: 4,812/500k · 1/3 turns · ~$0.024</code></pre>
+          </article>
+          <article class="demo-panel" data-demo-panel="correction">
+            <div>
+              <p class="eyebrow">Mismatch</p>
+              <h3>Bad claims are sent back for repair.</h3>
+              <p>If the model claims a write that did not happen, Kelyra returns actual state instead of accepting the story.</p>
+              <dl>
+                <div><dt>Claim</dt><dd>MODIFY README.md</dd></div>
+                <div><dt>Check</dt><dd>content hash drift</dd></div>
+                <div><dt>Outcome</dt><dd>correction turn</dd></div>
+              </dl>
+            </div>
+            <pre><code>✖ Verification failed
+Expected: 9b2d3c1a
+Actual:   44f0aa91
+
+Correction turn:
+The file differs from your declared CONTENT_HASH.
+Re-read README.md and submit a corrected FILE_ACTION.</code></pre>
+          </article>
+          <article class="demo-panel" data-demo-panel="security">
+            <div>
+              <p class="eyebrow">Policy gate</p>
+              <h3>Risky paths are stopped before disk writes.</h3>
+              <p>Sensitive files and command surfaces are blocked or require explicit opt-in, even for external agents.</p>
+              <dl>
+                <div><dt>Claim</dt><dd>CREATE .env</dd></div>
+                <div><dt>Check</dt><dd>sensitive path</dd></div>
+                <div><dt>Outcome</dt><dd>write blocked</dd></div>
+              </dl>
+            </div>
+            <pre><code>{
+  "ok": false,
+  "rejected": [{
+    "path": ".env",
+    "risk": "block",
+    "reason": "Sensitive file writes are blocked"
+  }]
+}</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section id="features" class="band entry-points">
+        <div class="section-copy narrow centered">
+          <p class="eyebrow">Entry points</p>
+          <h2>Choose the path that matches your workflow.</h2>
+          <p>
+            Kelyra can run the agent, learn repo rules, or act as the verified
+            file-edit boundary for another agent.
+          </p>
+        </div>
+        <div class="entry-grid">
+          <article>
+            <span>Use Kelyra as the agent</span>
+            <h3>Run one task or open chat</h3>
+            <p>For developers who want Kelyra to call a configured provider and verify every file edit.</p>
+            <code>kelyra init<br>kelyra run "explain this repo"</code>
+          </article>
+          <article>
+            <span>Teach Kelyra your repo</span>
+            <h3>Generate and load skills</h3>
+            <p>For teams that want repo rules, review expectations, and risk surfaces active every session.</p>
+            <code>kelyra learn<br>kelyra run --file TASK.md -s repo</code>
+          </article>
+          <article>
+            <span>Connect another agent</span>
+            <h3>Use Kelyra over MCP</h3>
+            <p>For MCP clients or external agents that need dry-runs, verified applies, rollback, and receipts.</p>
+            <code>kelyra mcp<br>swd_dry_run / swd_apply</code>
+          </article>
+        </div>
+      </section>
+
+      <section id="proof" class="band proof-band">
+        <div class="section-copy">
+          <p class="eyebrow">Proof first</p>
+          <h2>Every claimed edit becomes reviewable evidence.</h2>
+          <p>
+            Kelyra snapshots the filesystem before and after model output, verifies
+            the declared action, records the result, and exports a bundle reviewers
+            can inspect without trusting a chat transcript.
+          </p>
+        </div>
+        <div class="proof-grid">
+          <article class="proof-tile">
+            <span class="tile-index">01</span>
+            <h3>Strict Write Discipline</h3>
+            <p>Models must declare file actions. Kelyra checks disk reality before accepting the result.</p>
+          </article>
+          <article class="proof-tile">
+            <span class="tile-index">02</span>
+            <h3>Signed Receipts</h3>
+            <p>Each verified run records hashes, provider, branch, policy, and chain context.</p>
+          </article>
+          <article class="proof-tile">
+            <span class="tile-index">03</span>
+            <h3>Policy Gates</h3>
+            <p>Teams can require signatures, block risky paths, and enforce receipt-backed changes in CI.</p>
+          </article>
+          <article class="proof-tile">
+            <span class="tile-index">04</span>
+            <h3>Proof Viewer</h3>
+            <p>Portable proof bundles expose file status, integrity, signature state, chain state, and diffs.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band how-section">
+        <div class="section-copy narrow centered">
+          <p class="eyebrow">How it works</p>
+          <h2>One verified path for agent writes.</h2>
+        </div>
+        <div class="flow">
+          <article>
+            <span>1</span>
+            <h3>Agent proposes actions</h3>
+            <p>Use Kelyra chat/run, MCP, or external-agent JSON and FILE_ACTION output.</p>
+          </article>
+          <article>
+            <span>2</span>
+            <h3>Boundary validates</h3>
+            <p>Paths are constrained, sensitive files are blocked, and policy is loaded.</p>
+          </article>
+          <article>
+            <span>3</span>
+            <h3>SWD verifies disk</h3>
+            <p>The engine snapshots before and after state, hashes files, and rolls back failed writes.</p>
+          </article>
+          <article>
+            <span>4</span>
+            <h3>Receipts keep record</h3>
+            <p>Successful writes produce local receipts, proof bundles, and CI-verifiable evidence.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="platform" class="band split">
+        <div class="console-panel" aria-label="Kelyra Console chat preview">
+          <aside class="console-sidebar">
+            <strong>Kelyra Console</strong>
+            <span class="console-item active">auth hardening</span>
+            <span class="console-item">policy review</span>
+            <span class="console-item">release proof</span>
+            <span class="console-item">team receipts</span>
+          </aside>
+          <div class="console-chat">
+            <div class="console-header">
+              <strong>Chat with proof mode</strong>
+              <span>Claude Opus 4.7 · SWD on</span>
+            </div>
+            <div class="message user-message">
+              Fix the token rotation bug in <code>src/auth.ts</code> and prove the change.
+            </div>
+            <div class="message agent-message">
+              I found the unsafe reuse path. I will patch the rotation flow and verify the write before saving a receipt.
+            </div>
+            <div class="proof-card">
+              <div>
+                <span>PATCH</span>
+                <strong>src/auth.ts</strong>
+              </div>
+              <div>
+                <span>Status</span>
+                <strong>verified</strong>
+              </div>
+              <div>
+                <span>Receipt</span>
+                <strong>swd-8f1c2a</strong>
+              </div>
+            </div>
+            <div class="composer">
+              <span>Ask Kelyra to inspect, patch, or export proof...</span>
+              <button type="button">Run</button>
+            </div>
+          </div>
+        </div>
+        <div class="section-copy">
+          <p class="eyebrow">Console surface</p>
+          <h2>Console is the web chat, not just a dashboard.</h2>
+          <p>
+            The CLI stays useful without accounts or tokens. Kelyra Console is
+            the browser surface for proof chat, local bridge runs, receipt review,
+            and the future hosted workflow with auth, quota, and isolated jobs.
+          </p>
+        </div>
+      </section>
+
+      <section id="access" class="band access">
+        <div class="section-copy narrow">
+          <p class="eyebrow">Access model</p>
+          <h2>Two surfaces, one protocol.</h2>
+        </div>
+        <div class="access-columns">
+          <article>
+            <h3>Kelyra Core</h3>
+            <p>Open-source CLI for local SWD verification, receipts, policy checks, proof bundles, and CI gates.</p>
+            <ul>
+              <li>No wallet required</li>
+              <li>Bring your own provider key</li>
+              <li>Works with external agents</li>
+            </ul>
+          </article>
+          <article>
+            <h3>Kelyra Console</h3>
+            <p>Browser workspace for proof chat today, and the hosted path for model sessions, proof sharing, quotas, teams, and app tools.</p>
+            <ul>
+              <li>Local bridge proof mode</li>
+              <li>Team proof history</li>
+              <li>Cloud policy registry</li>
+            </ul>
+          </article>
+        </div>
+        <div class="console-strip">
+          <div>
+            <span>Core</span>
+            <strong>Open protocol engine</strong>
+          </div>
+          <div>
+            <span>Console</span>
+            <strong>Hosted chat + proof</strong>
+          </div>
+          <div>
+            <span>Teams</span>
+            <strong>Policy, CI, attestations</strong>
+          </div>
+        </div>
+      </section>
+
+      <section id="start" class="band start">
+        <div class="section-copy">
+          <p class="eyebrow">Quick start</p>
+          <h2>Run Kelyra locally first.</h2>
+        </div>
+        <div class="command-block">
+          <button class="copy-button" type="button" data-copy="npm install -g kelyra&#10;kelyra init --check&#10;kelyra providers check&#10;kelyra console">Copy</button>
+          <pre><code>npm install -g kelyra
+kelyra init --check
+kelyra providers check
+kelyra console</code></pre>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>Kelyra</span>
+      <span>Open protocol core. Verifiable agent execution.</span>
+    </footer>
+
+    <script src="./main.js"></script>
+  </body>
+</html>

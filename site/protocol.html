@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kelyra Protocol</title>
+    <meta name="description" content="Kelyra protocol, CLI, local console bridge, SWD receipts, policy gates, and proof bundles.">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Kelyra home">
+        <span class="brand-k">kelyra</span>
+      </a>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="./index.html#features">Product</a>
+        <a href="./protocol.html">Protocol</a>
+        <a href="./index.html#start">Install</a>
+        <a class="nav-pill" href="./console.html">Console</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero protocol-hero">
+        <div class="hero-copy hero-center">
+          <p class="eyebrow">Protocol and CLI</p>
+          <h1>Local proof first. Hosted console second.</h1>
+          <p class="lede">
+            Kelyra Core is the open execution boundary: SWD, receipts, policies,
+            proof bundles, CI verification, MCP, and a local console bridge.
+          </p>
+          <div class="hero-actions">
+            <button class="command-pill" type="button" data-copy="kelyra console">
+              <span>$</span> kelyra console
+              <small>⧉</small>
+            </button>
+            <a class="button secondary" href="./console.html">Open Console</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="band proof-band">
+        <div class="section-copy narrow centered">
+          <p class="eyebrow">Execution model</p>
+          <h2>What is real today.</h2>
+          <p>
+            The CLI can already run model-backed sessions when provider keys are
+            configured, or model-free SWD applies when another agent provides file actions.
+          </p>
+        </div>
+        <div class="protocol-grid">
+          <article>
+            <span>01</span>
+            <h3>CLI core</h3>
+            <p>Run chat, one-shot prompts, provider checks, SWD apply, receipts, proof export, policy, skills, MCP, and CI verification locally.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Local console bridge</h3>
+            <p><code>kelyra console</code> serves the web console and connects it to the current project without exposing filesystem control to the public web.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Hosted console path</h3>
+            <p>The public product should use backend API routes, auth, quotas, job isolation, and either cloud sandbox jobs or explicit local pairing.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band entry-points">
+        <div class="section-copy narrow centered">
+          <p class="eyebrow">Commands</p>
+          <h2>The product must stay inspectable from terminal.</h2>
+        </div>
+        <div class="command-matrix">
+          <article><strong>kelyra init --check</strong><span>Read-only setup and provider readiness.</span></article>
+          <article><strong>kelyra providers check</strong><span>Shows which model-backed paths are available.</span></article>
+          <article><strong>kelyra chat</strong><span>Interactive agent session with SWD verification.</span></article>
+          <article><strong>kelyra run --file TASK.md</strong><span>One-shot prompt with bounded turns and receipts.</span></article>
+          <article><strong>kelyra swd apply --stdin --json</strong><span>Model-free verified file actions from an external agent.</span></article>
+          <article><strong>kelyra proof export latest</strong><span>Portable proof bundle for the latest receipt.</span></article>
+          <article><strong>kelyra verify --ci</strong><span>Read-only CI verification for PR changes and receipts.</span></article>
+          <article><strong>kelyra console</strong><span>Local browser console connected to the current workspace.</span></article>
+        </div>
+      </section>
+
+      <section class="band access">
+        <div class="section-copy">
+          <p class="eyebrow">Public architecture</p>
+          <h2>The web product should not execute the user's filesystem directly.</h2>
+          <p>
+            A public Kelyra Console needs a real backend: authenticated sessions,
+            rate limits, provider routing, receipt storage, and isolated job runners.
+            The local bridge is useful for development and power users, but it must
+            stay bound to localhost and explicitly launched from the project.
+          </p>
+        </div>
+        <div class="console-strip">
+          <div>
+            <span>Public site</span>
+            <strong>Landing, docs, install, demo</strong>
+          </div>
+          <div>
+            <span>Hosted API</span>
+            <strong>Auth, quota, jobs, receipts</strong>
+          </div>
+          <div>
+            <span>Local bridge</span>
+            <strong>Explicit localhost proof runs</strong>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>Kelyra</span>
+      <span>Protocol core, console surface, CLI proof.</span>
+    </footer>
+
+    <script src="./main.js"></script>
+  </body>
+</html>
