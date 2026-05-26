@@ -62,22 +62,17 @@ function numericEnv(env, key, fallback) {
 
 function buildTierConfig(env, rateLimitPerMinute) {
   const tokenSymbol = env.KELYRA_TIER_TOKEN_SYMBOL || 'KELYRA';
-  const publicOracle = numericEnv(env, 'KELYRA_PUBLIC_ORACLE_DAILY', 12);
-  const publicData = numericEnv(env, 'KELYRA_PUBLIC_DATA_DAILY', 40);
-  const launchOracle = numericEnv(env, 'KELYRA_LAUNCH_ORACLE_DAILY', 60);
-  const launchData = numericEnv(env, 'KELYRA_LAUNCH_DATA_DAILY', 300);
-  const launchBuild = numericEnv(env, 'KELYRA_LAUNCH_BUILD_DAILY', 6);
-  const launchProof = numericEnv(env, 'KELYRA_LAUNCH_PROOF_DAILY', 12);
-  const builderTokenMinimum = env.KELYRA_BUILDER_TOKEN_MIN || '50000';
-  const teamTokenMinimum = env.KELYRA_TEAM_TOKEN_MIN || '250000';
-  const scaleTokenMinimum = env.KELYRA_SCALE_TOKEN_MIN || '1000000';
+  const basicTokenMinimum = env.KELYRA_BASIC_TOKEN_MIN || '5000000';
+  const coreTokenMinimum = env.KELYRA_CORE_TOKEN_MIN || '50000000';
+  const proTokenMinimum = env.KELYRA_PRO_TOKEN_MIN || '100000000';
+  const ultimateTokenMinimum = env.KELYRA_ULTIMATE_TOKEN_MIN || '1000000000';
 
   const config = {
     schema: 'kelyra.tiers.v1',
     quotaWindow: 'UTC day',
-    defaultTierId: env.KELYRA_DEFAULT_TIER_ID || 'launch',
-    accessCodeTierId: env.KELYRA_ACCESS_CODE_TIER_ID || 'launch',
-    anonymousTierId: 'public',
+    defaultTierId: env.KELYRA_DEFAULT_TIER_ID || 'basic',
+    accessCodeTierId: env.KELYRA_ACCESS_CODE_TIER_ID || 'basic',
+    anonymousTierId: env.KELYRA_ANONYMOUS_TIER_ID || 'basic',
     token: {
       chainId: BASE_CHAIN_ID,
       symbol: tokenSymbol,
@@ -114,67 +109,55 @@ function buildTierConfig(env, rateLimitPerMinute) {
     ],
     tiers: [
       {
-        id: 'public',
-        name: 'Public Preview',
-        access: 'No account required for read-only demo routes',
-        minimum: 'No wallet or asset required',
+        id: 'basic',
+        name: 'Basic',
+        access: `Wallet holding at least ${formatTokenAmount(basicTokenMinimum)} ${tokenSymbol}`,
+        minimum: `${formatTokenAmount(basicTokenMinimum)} ${tokenSymbol} minimum`,
+        tokenMinimum: basicTokenMinimum,
         dailyQuota: {
-          oracleMessages: publicOracle,
-          dataCalls: publicData,
-          buildActions: 0,
-          proofJobs: 0,
+          oracleMessages: numericEnv(env, 'KELYRA_BASIC_ORACLE_DAILY', 25),
+          dataCalls: numericEnv(env, 'KELYRA_BASIC_DATA_DAILY', 150),
+          buildActions: numericEnv(env, 'KELYRA_BASIC_BUILD_DAILY', 3),
+          proofJobs: numericEnv(env, 'KELYRA_BASIC_PROOF_DAILY', 6),
         },
       },
       {
-        id: 'launch',
-        name: 'Launch',
-        access: 'Beta access code while launch access is controlled',
-        minimum: 'Internal beta access, not a public wallet tier',
-        tokenMinimum: null,
+        id: 'core',
+        name: 'Core',
+        access: `Wallet holding at least ${formatTokenAmount(coreTokenMinimum)} ${tokenSymbol}`,
+        minimum: `${formatTokenAmount(coreTokenMinimum)} ${tokenSymbol} minimum`,
+        tokenMinimum: coreTokenMinimum,
         dailyQuota: {
-          oracleMessages: launchOracle,
-          dataCalls: launchData,
-          buildActions: launchBuild,
-          proofJobs: launchProof,
+          oracleMessages: numericEnv(env, 'KELYRA_CORE_ORACLE_DAILY', 100),
+          dataCalls: numericEnv(env, 'KELYRA_CORE_DATA_DAILY', 400),
+          buildActions: numericEnv(env, 'KELYRA_CORE_BUILD_DAILY', 10),
+          proofJobs: numericEnv(env, 'KELYRA_CORE_PROOF_DAILY', 25),
         },
       },
       {
-        id: 'builder',
-        name: 'Builder',
-        access: `Wallet holding at least ${formatTokenAmount(builderTokenMinimum)} ${tokenSymbol}`,
-        minimum: `${formatTokenAmount(builderTokenMinimum)} ${tokenSymbol} minimum`,
-        tokenMinimum: builderTokenMinimum,
+        id: 'pro',
+        name: 'Pro',
+        access: `Wallet holding at least ${formatTokenAmount(proTokenMinimum)} ${tokenSymbol}`,
+        minimum: `${formatTokenAmount(proTokenMinimum)} ${tokenSymbol} minimum`,
+        tokenMinimum: proTokenMinimum,
         dailyQuota: {
-          oracleMessages: numericEnv(env, 'KELYRA_BUILDER_ORACLE_DAILY', 200),
-          dataCalls: numericEnv(env, 'KELYRA_BUILDER_DATA_DAILY', 1200),
-          buildActions: numericEnv(env, 'KELYRA_BUILDER_BUILD_DAILY', 30),
-          proofJobs: numericEnv(env, 'KELYRA_BUILDER_PROOF_DAILY', 80),
+          oracleMessages: numericEnv(env, 'KELYRA_PRO_ORACLE_DAILY', 200),
+          dataCalls: numericEnv(env, 'KELYRA_PRO_DATA_DAILY', 800),
+          buildActions: numericEnv(env, 'KELYRA_PRO_BUILD_DAILY', 25),
+          proofJobs: numericEnv(env, 'KELYRA_PRO_PROOF_DAILY', 80),
         },
       },
       {
-        id: 'team',
-        name: 'Team',
-        access: `Wallet holding at least ${formatTokenAmount(teamTokenMinimum)} ${tokenSymbol}`,
-        minimum: `${formatTokenAmount(teamTokenMinimum)} ${tokenSymbol} minimum`,
-        tokenMinimum: teamTokenMinimum,
+        id: 'ultimate',
+        name: 'Ultimate',
+        access: `Wallet holding at least ${formatTokenAmount(ultimateTokenMinimum)} ${tokenSymbol}`,
+        minimum: `${formatTokenAmount(ultimateTokenMinimum)} ${tokenSymbol} minimum`,
+        tokenMinimum: ultimateTokenMinimum,
         dailyQuota: {
-          oracleMessages: numericEnv(env, 'KELYRA_TEAM_ORACLE_DAILY', 600),
-          dataCalls: numericEnv(env, 'KELYRA_TEAM_DATA_DAILY', 4000),
-          buildActions: numericEnv(env, 'KELYRA_TEAM_BUILD_DAILY', 120),
-          proofJobs: numericEnv(env, 'KELYRA_TEAM_PROOF_DAILY', 300),
-        },
-      },
-      {
-        id: 'scale',
-        name: 'Scale',
-        access: `Wallet holding at least ${formatTokenAmount(scaleTokenMinimum)} ${tokenSymbol}`,
-        minimum: `${formatTokenAmount(scaleTokenMinimum)} ${tokenSymbol} minimum`,
-        tokenMinimum: scaleTokenMinimum,
-        dailyQuota: {
-          oracleMessages: numericEnv(env, 'KELYRA_SCALE_ORACLE_DAILY', 2000),
-          dataCalls: numericEnv(env, 'KELYRA_SCALE_DATA_DAILY', 15000),
-          buildActions: numericEnv(env, 'KELYRA_SCALE_BUILD_DAILY', 500),
-          proofJobs: numericEnv(env, 'KELYRA_SCALE_PROOF_DAILY', 1200),
+          oracleMessages: numericEnv(env, 'KELYRA_ULTIMATE_ORACLE_DAILY', 750),
+          dataCalls: numericEnv(env, 'KELYRA_ULTIMATE_DATA_DAILY', 2500),
+          buildActions: numericEnv(env, 'KELYRA_ULTIMATE_BUILD_DAILY', 75),
+          proofJobs: numericEnv(env, 'KELYRA_ULTIMATE_PROOF_DAILY', 300),
         },
       },
     ],
@@ -1178,7 +1161,7 @@ function tierById(config, tierId) {
 }
 
 function tierForSession(config, session) {
-  if (!session) return tierById(config, config.tierConfig.anonymousTierId || 'public');
+  if (!session) return tierById(config, config.tierConfig.anonymousTierId || config.tierConfig.defaultTierId || 'basic');
   if (session.tierId) return tierById(config, session.tierId);
   if (session.authMode === 'access-code') return tierById(config, config.tierConfig.accessCodeTierId);
   return tierById(config, config.tierConfig.defaultTierId);

@@ -30,7 +30,7 @@ Required:
 ```bash
 NODE_ENV=production
 KELYRA_API_SECRET=<random 32+ char secret>
-KELYRA_ACCESS_CODE_SHA256=<sha256 of launch access code>
+KELYRA_ACCESS_CODE_SHA256=<sha256 of beta access code>
 KELYRA_ALLOWED_ORIGINS=https://kelyra.example
 DATABASE_URL=postgres://...
 ```
@@ -47,12 +47,13 @@ KELYRA_BASE_RPC_URL=https://mainnet.base.org
 KELYRA_REQUIRE_TOKEN_HOLDER=true
 KELYRA_TOKEN_ADDRESS=<base-erc20-contract-address>
 KELYRA_TIER_TOKEN_SYMBOL=KELYRA
-KELYRA_BUILDER_TOKEN_MIN=50000
-KELYRA_TEAM_TOKEN_MIN=250000
-KELYRA_SCALE_TOKEN_MIN=1000000
+KELYRA_BASIC_TOKEN_MIN=5000000
+KELYRA_CORE_TOKEN_MIN=50000000
+KELYRA_PRO_TOKEN_MIN=100000000
+KELYRA_ULTIMATE_TOKEN_MIN=1000000000
 KELYRA_WALLET_AUTH_DOMAIN=Kelyra Console
 KELYRA_RATE_LIMIT_PER_MINUTE=80
-KELYRA_ACCESS_CODE_TIER_ID=launch
+KELYRA_ACCESS_CODE_TIER_ID=basic
 KELYRA_SESSION_TTL_SECONDS=43200
 PORT=8080
 ```
@@ -67,8 +68,8 @@ worker service claim queued jobs and write hosted receipts.
 
 `KELYRA_REQUIRE_TOKEN_HOLDER=true` makes wallet login check the configured ERC-20
 balance on Base. The wallet tier is selected from the configured token thresholds:
-Builder, Team, or Scale. Keep `KELYRA_ACCESS_CODE_SHA256` available only for
-internal beta users or emergency access.
+Basic, Core, Pro, or Ultimate. Keep `KELYRA_ACCESS_CODE_SHA256` available only
+for internal beta users or emergency access.
 
 Daily quotas are served from `/api/tiers` and enforced by the backend. The default
 tiers can be tuned with `KELYRA_*_ORACLE_DAILY`, `KELYRA_*_DATA_DAILY`,
