@@ -51,9 +51,13 @@ KELYRA_BASIC_TOKEN_MIN=5000000
 KELYRA_CORE_TOKEN_MIN=50000000
 KELYRA_PRO_TOKEN_MIN=100000000
 KELYRA_ULTIMATE_TOKEN_MIN=1000000000
+KELYRA_OPERATOR_ORACLE_DAILY=500
+KELYRA_OPERATOR_DATA_DAILY=5000
+KELYRA_OPERATOR_BUILD_DAILY=120
+KELYRA_OPERATOR_PROOF_DAILY=250
 KELYRA_WALLET_AUTH_DOMAIN=Kelyra Console
 KELYRA_RATE_LIMIT_PER_MINUTE=80
-KELYRA_ACCESS_CODE_TIER_ID=basic
+KELYRA_ACCESS_CODE_TIER_ID=operator
 KELYRA_SESSION_TTL_SECONDS=43200
 PORT=8080
 ```
@@ -69,12 +73,15 @@ worker service claim queued jobs and write hosted receipts.
 `KELYRA_REQUIRE_TOKEN_HOLDER=true` makes wallet login check the configured ERC-20
 balance on Base. The wallet tier is selected from the configured token thresholds:
 Basic, Core, Pro, or Ultimate. Keep `KELYRA_ACCESS_CODE_SHA256` available only
-for internal beta users or emergency access.
+for internal beta users or emergency access. Access-code sessions use the hidden
+`operator` tier by default so internal smoke tests do not spend public holder quota.
 
-Daily quotas are served from `/api/tiers` and enforced by the backend. The default
-tiers can be tuned with `KELYRA_*_ORACLE_DAILY`, `KELYRA_*_DATA_DAILY`,
-`KELYRA_*_BUILD_DAILY`, and `KELYRA_*_PROOF_DAILY`, or replaced with
-`KELYRA_TIER_CONFIG_JSON`.
+Daily quotas are served from `/api/tiers` and enforced by the backend. Wallet
+sessions start on fresh quota unless yesterday's UTC holder snapshot already met
+the same tier minimum; after that they receive full quota. The default tiers can
+be tuned with `KELYRA_*_ORACLE_DAILY`, `KELYRA_*_DATA_DAILY`,
+`KELYRA_*_BUILD_DAILY`, `KELYRA_*_PROOF_DAILY`, and matching
+`KELYRA_*_FRESH_*` variables, or replaced with `KELYRA_TIER_CONFIG_JSON`.
 
 ## Railway MVP
 
@@ -112,6 +119,8 @@ KELYRA_SMOKE_BASE_URL=http://127.0.0.1:4350 npm run backend:smoke
 ## Current Endpoints
 
 - `GET /api/health`
+- `GET /api/tiers`
+- `GET /api/quota/profile`
 - `GET /api/pulse`
 - `POST /api/oracle/analyze`
 - `GET /api/auth/session`
@@ -127,6 +136,10 @@ KELYRA_SMOKE_BASE_URL=http://127.0.0.1:4350 npm run backend:smoke
 - `GET /api/apps`
 - `POST /api/apps/build`
 - `GET /api/apps/:slug`
+- `PATCH /api/apps/:slug`
+- `DELETE /api/apps/:slug`
+- `POST /api/apps/:slug/publish`
+- `GET /api/apps/:slug/assets/:file`
 - `GET /api/apps/:slug/preview`
 
 Static landing and console files are served by the same backend process from

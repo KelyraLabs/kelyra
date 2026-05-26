@@ -451,7 +451,7 @@ function renderForgeApps(apps) {
     card.type = 'button';
     card.className = `forge-app-card${state.selectedForgeSlug === app.slug ? ' active' : ''}`;
     card.innerHTML = '<span></span><strong></strong><p></p>';
-    card.querySelector('span').textContent = app.kind || 'forge app';
+    card.querySelector('span').textContent = `${app.status || 'draft'} · ${app.kind || 'forge app'} · v${app.version || 1}`;
     card.querySelector('strong').textContent = app.title || app.slug;
     card.querySelector('strong').title = app.title || app.slug;
     card.querySelector('p').textContent = `${(app.files || []).length} files · ${(app.bridgeCalls || []).join(', ') || 'no bridge calls'}`;
@@ -801,10 +801,14 @@ function oracleSummary(payload) {
   const token = primary?.token || payload.token || {};
   const flags = primary?.riskFlags?.length ? primary.riskFlags.join(', ') : 'no risk-shape flags from this source';
   const unknowns = payload.unknowns?.join(', ') || 'none';
+  const contract = payload.contract?.ok
+    ? `Contract source: ${payload.contract.hasBytecode ? 'bytecode found' : 'bytecode unknown'}; ERC-20 ${payload.contract.erc20?.symbol || 'metadata unknown'}${payload.contract.erc20?.totalSupplyFormatted ? ` supply ${payload.contract.erc20.totalSupplyFormatted}` : ''}.`
+    : 'Contract source: unavailable from Base RPC.';
   return [
     `${token.symbol || token.name || 'Token'} on Base: ${formatCurrency(primary?.priceUsd, false)} price, ${formatCurrency(primary?.liquidityUsd)} liquidity, ${formatCurrency(primary?.volume24h)} 24h volume.`,
     `24h change: ${formatPercent(primary?.priceChange24h)}. Buy pressure: ${primary?.buyPressure === null || primary?.buyPressure === undefined ? 'unknown' : `${Math.round(primary.buyPressure * 100)}%`}. Age: ${formatAge(primary?.ageHours)}.`,
     `Risk shape: ${flags}.`,
+    contract,
     `Unknown until more sources are connected: ${unknowns}.`,
   ].join('\n');
 }

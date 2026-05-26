@@ -66,12 +66,18 @@ function buildTierConfig(env, rateLimitPerMinute) {
   const coreTokenMinimum = env.KELYRA_CORE_TOKEN_MIN || '50000000';
   const proTokenMinimum = env.KELYRA_PRO_TOKEN_MIN || '100000000';
   const ultimateTokenMinimum = env.KELYRA_ULTIMATE_TOKEN_MIN || '1000000000';
+  const operatorQuota = {
+    oracleMessages: numericEnv(env, 'KELYRA_OPERATOR_ORACLE_DAILY', 500),
+    dataCalls: numericEnv(env, 'KELYRA_OPERATOR_DATA_DAILY', 5000),
+    buildActions: numericEnv(env, 'KELYRA_OPERATOR_BUILD_DAILY', 120),
+    proofJobs: numericEnv(env, 'KELYRA_OPERATOR_PROOF_DAILY', 250),
+  };
 
   const config = {
     schema: 'kelyra.tiers.v1',
     quotaWindow: 'UTC day',
     defaultTierId: env.KELYRA_DEFAULT_TIER_ID || 'basic',
-    accessCodeTierId: env.KELYRA_ACCESS_CODE_TIER_ID || 'basic',
+    accessCodeTierId: env.KELYRA_ACCESS_CODE_TIER_ID || 'operator',
     anonymousTierId: env.KELYRA_ANONYMOUS_TIER_ID || 'basic',
     token: {
       chainId: BASE_CHAIN_ID,
@@ -120,6 +126,12 @@ function buildTierConfig(env, rateLimitPerMinute) {
           buildActions: numericEnv(env, 'KELYRA_BASIC_BUILD_DAILY', 3),
           proofJobs: numericEnv(env, 'KELYRA_BASIC_PROOF_DAILY', 6),
         },
+        freshDailyQuota: {
+          oracleMessages: numericEnv(env, 'KELYRA_BASIC_FRESH_ORACLE_DAILY', 15),
+          dataCalls: numericEnv(env, 'KELYRA_BASIC_FRESH_DATA_DAILY', 50),
+          buildActions: numericEnv(env, 'KELYRA_BASIC_FRESH_BUILD_DAILY', 1),
+          proofJobs: numericEnv(env, 'KELYRA_BASIC_FRESH_PROOF_DAILY', 2),
+        },
       },
       {
         id: 'core',
@@ -132,6 +144,12 @@ function buildTierConfig(env, rateLimitPerMinute) {
           dataCalls: numericEnv(env, 'KELYRA_CORE_DATA_DAILY', 400),
           buildActions: numericEnv(env, 'KELYRA_CORE_BUILD_DAILY', 10),
           proofJobs: numericEnv(env, 'KELYRA_CORE_PROOF_DAILY', 25),
+        },
+        freshDailyQuota: {
+          oracleMessages: numericEnv(env, 'KELYRA_CORE_FRESH_ORACLE_DAILY', 50),
+          dataCalls: numericEnv(env, 'KELYRA_CORE_FRESH_DATA_DAILY', 100),
+          buildActions: numericEnv(env, 'KELYRA_CORE_FRESH_BUILD_DAILY', 3),
+          proofJobs: numericEnv(env, 'KELYRA_CORE_FRESH_PROOF_DAILY', 8),
         },
       },
       {
@@ -146,6 +164,12 @@ function buildTierConfig(env, rateLimitPerMinute) {
           buildActions: numericEnv(env, 'KELYRA_PRO_BUILD_DAILY', 25),
           proofJobs: numericEnv(env, 'KELYRA_PRO_PROOF_DAILY', 80),
         },
+        freshDailyQuota: {
+          oracleMessages: numericEnv(env, 'KELYRA_PRO_FRESH_ORACLE_DAILY', 50),
+          dataCalls: numericEnv(env, 'KELYRA_PRO_FRESH_DATA_DAILY', 250),
+          buildActions: numericEnv(env, 'KELYRA_PRO_FRESH_BUILD_DAILY', 5),
+          proofJobs: numericEnv(env, 'KELYRA_PRO_FRESH_PROOF_DAILY', 20),
+        },
       },
       {
         id: 'ultimate',
@@ -159,6 +183,23 @@ function buildTierConfig(env, rateLimitPerMinute) {
           buildActions: numericEnv(env, 'KELYRA_ULTIMATE_BUILD_DAILY', 75),
           proofJobs: numericEnv(env, 'KELYRA_ULTIMATE_PROOF_DAILY', 300),
         },
+        freshDailyQuota: {
+          oracleMessages: numericEnv(env, 'KELYRA_ULTIMATE_FRESH_ORACLE_DAILY', 150),
+          dataCalls: numericEnv(env, 'KELYRA_ULTIMATE_FRESH_DATA_DAILY', 500),
+          buildActions: numericEnv(env, 'KELYRA_ULTIMATE_FRESH_BUILD_DAILY', 10),
+          proofJobs: numericEnv(env, 'KELYRA_ULTIMATE_FRESH_PROOF_DAILY', 50),
+        },
+      },
+    ],
+    internalTiers: [
+      {
+        id: 'operator',
+        name: 'Operator',
+        access: 'Internal beta access code',
+        minimum: 'Internal access only',
+        hidden: true,
+        dailyQuota: operatorQuota,
+        freshDailyQuota: operatorQuota,
       },
     ],
   };
@@ -174,6 +215,7 @@ function buildTierConfig(env, rateLimitPerMinute) {
       safetyLimits: Array.isArray(parsed.safetyLimits) ? parsed.safetyLimits : config.safetyLimits,
       quotaTypes: Array.isArray(parsed.quotaTypes) ? parsed.quotaTypes : config.quotaTypes,
       tiers: parsed.tiers,
+      internalTiers: Array.isArray(parsed.internalTiers) ? parsed.internalTiers : config.internalTiers,
     };
   } catch (err) {
     throw new Error(`KELYRA_TIER_CONFIG_JSON is invalid: ${err instanceof Error ? err.message : String(err)}`);
@@ -184,6 +226,13 @@ function tokenTiersFromConfig(tierConfig) {
   return (tierConfig.tiers || [])
     .filter((tier) => tier.tokenMinimum !== null && tier.tokenMinimum !== undefined && String(tier.tokenMinimum).trim() !== '')
     .map((tier) => ({ ...tier, tokenMinimum: String(tier.tokenMinimum).trim() }));
+}
+
+function allTiersFromConfig(tierConfig) {
+  return [
+    ...(Array.isArray(tierConfig.tiers) ? tierConfig.tiers : []),
+    ...(Array.isArray(tierConfig.internalTiers) ? tierConfig.internalTiers : []),
+  ];
 }
 
 function lowestTokenMinimum(tierConfig) {
@@ -394,6 +443,67 @@ function hostedForgeHtml(app) {
 </html>`;
 }
 
+function hostedForgeStyles() {
+  return [
+    ':root { color-scheme: dark; --bg: #08090d; --panel: #11141c; --ink: #f7f4f8; --muted: #a7a1b0; --line: rgba(255,255,255,.12); --cyan: #7de9f0; }',
+    '* { box-sizing: border-box; }',
+    'body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 18% 10%, rgba(125,233,240,.12), transparent 32%), var(--bg); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }',
+    'main { width: min(980px, calc(100% - 32px)); margin: 0 auto; padding: 46px 0; }',
+    'header { display: grid; gap: 14px; margin-bottom: 24px; }',
+    '.eyebrow, span { color: var(--cyan); font: 800 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }',
+    'h1 { margin: 0; max-width: 780px; font-size: clamp(40px, 7vw, 78px); line-height: .92; letter-spacing: 0; }',
+    'p { color: var(--muted); font-size: 16px; line-height: 1.65; }',
+    '.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 22px 0; }',
+    'article, .result { border: 1px solid var(--line); border-radius: 10px; background: linear-gradient(180deg, rgba(255,255,255,.04), transparent), rgba(17,20,28,.84); padding: 18px; }',
+    'strong { display: block; margin-top: 10px; font-size: 18px; }',
+    'button { border: 1px solid rgba(125,233,240,.32); border-radius: 9px; background: rgba(125,233,240,.1); color: var(--ink); padding: 12px 15px; font: 800 12px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; cursor: pointer; }',
+    'pre { overflow: auto; margin: 14px 0 0; color: var(--muted); white-space: pre-wrap; }',
+    '@media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding-top: 28px; } }',
+  ].join('\n');
+}
+
+function hostedForgeScript(defaultCall) {
+  return `(() => {
+  const pending = new Map();
+  window.kelyraQuery = (type, target, params = {}) => new Promise((resolve, reject) => {
+    const queryId = Math.random().toString(36).slice(2);
+    pending.set(queryId, { resolve, reject });
+    window.parent.postMessage({
+      source: 'kelyra-forge',
+      type: 'DATA_REQUEST',
+      queryId,
+      payload: { type, target, params },
+    }, '*');
+    window.setTimeout(() => {
+      if (!pending.has(queryId)) return;
+      pending.delete(queryId);
+      reject(new Error('Kelyra bridge timeout'));
+    }, 15000);
+  });
+
+  window.addEventListener('message', (event) => {
+    const message = event.data || {};
+    if (message.source !== 'kelyra-console' || message.type !== 'DATA_RESPONSE') return;
+    const item = pending.get(message.queryId);
+    if (!item) return;
+    pending.delete(message.queryId);
+    if (message.ok) item.resolve(message.payload);
+    else item.reject(new Error(message.error || 'Kelyra bridge error'));
+  });
+
+  const output = document.getElementById('output');
+  document.getElementById('run-query')?.addEventListener('click', async () => {
+    output.textContent = 'Loading source-backed data...';
+    try {
+      const result = await window.kelyraQuery(${JSON.stringify(defaultCall)}, ${JSON.stringify(KELYRA_REFERENCE_TOKEN_ADDRESS)}, { limit: 6 });
+      output.textContent = JSON.stringify({ summary: result.summary, payload: result.payload }, null, 2);
+    } catch (err) {
+      output.textContent = err instanceof Error ? err.message : String(err);
+    }
+  });
+})();`;
+}
+
 function buildProofJob(input) {
   const now = new Date().toISOString();
   return {
@@ -412,18 +522,24 @@ function buildProofJob(input) {
 
 function buildForgeApp(input) {
   const prompt = String(input.prompt || '').trim();
-  const generatedAt = new Date().toISOString();
+  const previous = input.previous || null;
+  const generatedAt = previous?.generatedAt || new Date().toISOString();
+  const updatedAt = new Date().toISOString();
   const title = titleFromPrompt(prompt);
   const kind = classifyForgeApp(prompt);
-  const slug = slugify(`${prompt}-${input.ownerSub || 'access-code'}`);
+  const slug = previous?.slug || slugify(`${prompt}-${input.ownerSub || 'access-code'}`);
+  const version = Number(previous?.version || 0) + 1;
   const capabilities = forgeCapabilities(kind);
   const bridgeCalls = forgeBridgeCalls(kind);
+  const defaultCall = bridgeCalls.includes('pulse.lanes') ? 'pulse.lanes' : bridgeCalls[0] || 'workspace.context';
   const manifest = {
     schema: 'kelyra.forge.hosted.v1',
     slug,
     title,
     kind,
     generatedAt,
+    updatedAt,
+    version,
     promptHash: sha256(prompt),
     sourceDiscipline: 'Unknown values must stay unknown unless returned by an approved Kelyra bridge call.',
     sandbox: {
@@ -436,6 +552,8 @@ function buildForgeApp(input) {
   const previewHtml = hostedForgeHtml({ ...manifest, capabilities, bridgeCalls });
   const assets = {
     'index.html': previewHtml,
+    'styles.css': `${hostedForgeStyles()}\n`,
+    'app.js': `${hostedForgeScript(defaultCall)}\n`,
     'manifest.json': `${JSON.stringify(manifest, null, 2)}\n`,
   };
 
@@ -443,12 +561,15 @@ function buildForgeApp(input) {
     slug,
     title,
     kind,
+    version,
+    promptPreview: prompt.slice(0, 220),
+    promptHash: sha256(prompt),
     generatedAt,
-    updatedAt: generatedAt,
+    updatedAt,
     ownerSub: input.ownerSub || 'access-code',
-    status: 'draft',
+    status: input.status || previous?.status || 'draft',
     proofJobId: input.proofJobId || null,
-    receiptId: null,
+    receiptId: previous?.receiptId || null,
     bridgeCalls,
     capabilities,
     previewUrl: `/api/apps/${slug}/preview`,
@@ -546,6 +667,92 @@ function tokenTierForBalance(config, balance, decimals) {
     .sort((a, b) => a.minimumRaw > b.minimumRaw ? -1 : a.minimumRaw < b.minimumRaw ? 1 : 0);
 
   return tiers.find((item) => balance >= item.minimumRaw) || null;
+}
+
+function utcDay(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
+function previousUtcDay(date = new Date()) {
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate() - 1,
+    0,
+    0,
+    0,
+    0,
+  )).toISOString().slice(0, 10);
+}
+
+function nextUtcReset(date = new Date()) {
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate() + 1,
+    0,
+    0,
+    0,
+    0,
+  )).toISOString();
+}
+
+function validQuotaMode(value) {
+  return value === 'full' || value === 'fresh';
+}
+
+async function applyHolderQuotaMode(config, store, address, tokenGate) {
+  if (!tokenGate?.required || !tokenGate.tierId) {
+    return {
+      ...tokenGate,
+      quotaMode: validQuotaMode(tokenGate?.quotaMode) ? tokenGate.quotaMode : 'full',
+    };
+  }
+
+  const now = new Date();
+  const currentDay = utcDay(now);
+  const previousDay = previousUtcDay(now);
+  const explicitMode = validQuotaMode(tokenGate.quotaMode) ? tokenGate.quotaMode : '';
+  let quotaMode = explicitMode || 'fresh';
+  const tier = tierById(config, tokenGate.tierId);
+  const decimals = Number(tokenGate.decimals ?? 18);
+
+  if (!explicitMode && tier?.tokenMinimum && Number.isInteger(decimals)) {
+    const previous = await store.getHolderSnapshot(address, previousDay).catch(() => null);
+    if (previous?.balance !== undefined && previous?.balance !== null) {
+      try {
+        const previousBalance = BigInt(String(previous.balance));
+        const minimum = parseUnits(String(tier.tokenMinimum), decimals);
+        if (previousBalance >= minimum) quotaMode = 'full';
+      } catch {
+        quotaMode = 'fresh';
+      }
+    }
+  }
+
+  const snapshot = {
+    address,
+    snapshotDay: currentDay,
+    balance: String(tokenGate.balance || '0'),
+    balanceFormatted: tokenGate.balanceFormatted || null,
+    decimals: Number.isInteger(decimals) ? decimals : 18,
+    symbol: tokenGate.symbol || config.tierConfig.token?.symbol || 'KELYRA',
+    tierId: tokenGate.tierId,
+    tierName: tokenGate.tierName,
+    recordedAt: now.toISOString(),
+  };
+  await store.recordHolderSnapshot(snapshot).catch(() => {});
+
+  return {
+    ...tokenGate,
+    quotaMode,
+    quotaSnapshot: {
+      mode: quotaMode,
+      previousDay,
+      currentDay,
+      nextFullQuotaCheckAt: nextUtcReset(now),
+    },
+  };
 }
 
 async function tokenHolderStatus(config, address) {
@@ -646,6 +853,7 @@ class FileStore {
     this.appsPath = join(storeDir, 'forge-apps.json');
     this.noncesPath = join(storeDir, 'auth-nonces.json');
     this.usagePath = join(storeDir, 'usage-counters.json');
+    this.holderSnapshotsPath = join(storeDir, 'holder-snapshots.json');
   }
 
   async readJson(path, fallback) {
@@ -741,6 +949,21 @@ class FileStore {
     return apps.find((app) => app.slug === slug) || null;
   }
 
+  async updateForgeApp(app) {
+    const apps = await this.readJson(this.appsPath, []);
+    const next = apps.map((item) => item.slug === app.slug ? app : item);
+    if (!next.some((item) => item.slug === app.slug)) next.unshift(app);
+    await this.writeJson(this.appsPath, next.slice(0, 250));
+    return app;
+  }
+
+  async deleteForgeApp(slug, ownerSub) {
+    const apps = await this.readJson(this.appsPath, []);
+    const next = apps.filter((app) => !(app.slug === slug && app.ownerSub === ownerSub));
+    await this.writeJson(this.appsPath, next);
+    return next.length !== apps.length;
+  }
+
   async createAuthNonce(nonceRecord) {
     const records = await this.readJson(this.noncesPath, []);
     const now = Date.now();
@@ -764,6 +987,37 @@ class FileStore {
     records[index] = record;
     await this.writeJson(this.noncesPath, records);
     return record;
+  }
+
+  async recordHolderSnapshot(snapshot) {
+    const snapshots = await this.readJson(this.holderSnapshotsPath, []);
+    const next = [
+      snapshot,
+      ...snapshots.filter((item) => !(item.address === snapshot.address && item.snapshotDay === snapshot.snapshotDay)),
+    ].slice(0, 5000);
+    await this.writeJson(this.holderSnapshotsPath, next);
+    return snapshot;
+  }
+
+  async getHolderSnapshot(address, snapshotDay) {
+    const snapshots = await this.readJson(this.holderSnapshotsPath, []);
+    return snapshots.find((item) => item.address === address && item.snapshotDay === snapshotDay) || null;
+  }
+
+  async getUsage(ownerSub, quotaKey, windowId) {
+    const counters = await this.readJson(this.usagePath, []);
+    const current = counters.find((item) => (
+      item.ownerSub === ownerSub &&
+      item.quotaKey === quotaKey &&
+      item.windowId === windowId
+    ));
+    return {
+      ownerSub,
+      quotaKey,
+      windowId,
+      used: Number(current?.count || 0),
+      resetAt: current?.resetAt || null,
+    };
   }
 
   async consumeUsage(ownerSub, quotaKey, limit, windowId, resetAt) {
@@ -852,6 +1106,18 @@ class PostgresStore {
           updated_at timestamptz NOT NULL DEFAULT now(),
           PRIMARY KEY (owner_sub, quota_key, window_id)
         );
+
+        CREATE TABLE IF NOT EXISTS holder_snapshots (
+          address text NOT NULL,
+          snapshot_day text NOT NULL,
+          balance text NOT NULL,
+          decimals integer NOT NULL,
+          tier_id text,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          data jsonb NOT NULL,
+          PRIMARY KEY (address, snapshot_day)
+        );
+        CREATE INDEX IF NOT EXISTS holder_snapshots_day_idx ON holder_snapshots (snapshot_day, tier_id);
       `));
     }
     await this.ready;
@@ -993,6 +1259,28 @@ class PostgresStore {
     return result.rows[0]?.data || null;
   }
 
+  async updateForgeApp(app) {
+    await this.ensureSchema();
+    const pool = await this.pool();
+    await pool.query(
+      `UPDATE forge_apps
+       SET title = $2, kind = $3, updated_at = $4, data = $5
+       WHERE slug = $1 AND owner_sub = $6`,
+      [app.slug, app.title, app.kind, app.updatedAt || new Date().toISOString(), app, app.ownerSub],
+    );
+    return app;
+  }
+
+  async deleteForgeApp(slug, ownerSub) {
+    await this.ensureSchema();
+    const pool = await this.pool();
+    const result = await pool.query(
+      'DELETE FROM forge_apps WHERE slug = $1 AND owner_sub = $2',
+      [slug, ownerSub],
+    );
+    return Number(result.rowCount || 0) > 0;
+  }
+
   async createAuthNonce(nonceRecord) {
     await this.ensureSchema();
     const pool = await this.pool();
@@ -1023,6 +1311,57 @@ class PostgresStore {
       [address, nonce],
     );
     return result.rows[0]?.data || null;
+  }
+
+  async recordHolderSnapshot(snapshot) {
+    await this.ensureSchema();
+    const pool = await this.pool();
+    await pool.query(
+      `INSERT INTO holder_snapshots (address, snapshot_day, balance, decimals, tier_id, data)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (address, snapshot_day) DO UPDATE SET
+         balance = excluded.balance,
+         decimals = excluded.decimals,
+         tier_id = excluded.tier_id,
+         data = excluded.data`,
+      [
+        snapshot.address,
+        snapshot.snapshotDay,
+        String(snapshot.balance || '0'),
+        Number(snapshot.decimals || 18),
+        snapshot.tierId || null,
+        snapshot,
+      ],
+    );
+    return snapshot;
+  }
+
+  async getHolderSnapshot(address, snapshotDay) {
+    await this.ensureSchema();
+    const pool = await this.pool();
+    const result = await pool.query(
+      'SELECT data FROM holder_snapshots WHERE address = $1 AND snapshot_day = $2 LIMIT 1',
+      [address, snapshotDay],
+    );
+    return result.rows[0]?.data || null;
+  }
+
+  async getUsage(ownerSub, quotaKey, windowId) {
+    await this.ensureSchema();
+    const pool = await this.pool();
+    const result = await pool.query(
+      `SELECT count, reset_at FROM usage_counters
+       WHERE owner_sub = $1 AND quota_key = $2 AND window_id = $3
+       LIMIT 1`,
+      [ownerSub, quotaKey, windowId],
+    );
+    return {
+      ownerSub,
+      quotaKey,
+      windowId,
+      used: Number(result.rows[0]?.count || 0),
+      resetAt: result.rows[0]?.reset_at ? new Date(result.rows[0].reset_at).toISOString() : null,
+    };
   }
 
   async consumeUsage(ownerSub, quotaKey, limit, windowId, resetAt) {
@@ -1125,6 +1464,7 @@ function createRateLimiter(config) {
 }
 
 function publicTierConfig(config) {
+  const { internalTiers, accessCodeTierId, ...publicConfig } = config.tierConfig;
   const gate = {
     walletAuth: true,
     accessCodeBeta: true,
@@ -1146,14 +1486,14 @@ function publicTierConfig(config) {
 	  };
 
   return {
-    ...config.tierConfig,
+    ...publicConfig,
     gate,
     enforced: true,
   };
 }
 
 function tierById(config, tierId) {
-  const tiers = config.tierConfig.tiers || [];
+  const tiers = allTiersFromConfig(config.tierConfig);
   return tiers.find((tier) => tier.id === tierId) ||
     tiers.find((tier) => tier.id === config.tierConfig.defaultTierId) ||
     tiers[0] ||
@@ -1167,8 +1507,16 @@ function tierForSession(config, session) {
   return tierById(config, config.tierConfig.defaultTierId);
 }
 
-function quotaLimitFor(tier, quotaKey) {
-  const value = tier?.dailyQuota?.[quotaKey];
+function quotaModeForSession(session) {
+  if (!session) return 'full';
+  if (validQuotaMode(session.quotaMode)) return session.quotaMode;
+  if (validQuotaMode(session.tokenGate?.quotaMode)) return session.tokenGate.quotaMode;
+  return session.authMode === 'wallet' && session.tokenGate?.required ? 'fresh' : 'full';
+}
+
+function quotaLimitFor(tier, quotaKey, quotaMode = 'full') {
+  const quota = quotaMode === 'fresh' && tier?.freshDailyQuota ? tier.freshDailyQuota : tier?.dailyQuota;
+  const value = quota?.[quotaKey];
   if (value === null || value === 'unlimited') return Number.POSITIVE_INFINITY;
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
@@ -1199,10 +1547,52 @@ function quotaHeaders(quota) {
   return {
     'x-kelyra-quota-tier': quota.tierId,
     'x-kelyra-quota-key': quota.quotaKey,
+    'x-kelyra-quota-mode': quota.quotaMode || 'full',
     'x-kelyra-quota-limit': quota.limit === null ? 'unlimited' : String(quota.limit),
     'x-kelyra-quota-used': String(quota.used),
     'x-kelyra-quota-remaining': quota.remaining === null ? 'unlimited' : String(quota.remaining),
     'x-kelyra-quota-reset': quota.resetAt,
+  };
+}
+
+function quotaValuesForMode(tier, quotaMode) {
+  return Object.fromEntries(QUOTA_KEYS.map((key) => [key, quotaLimitFor(tier, key, quotaMode)]));
+}
+
+async function quotaProfile(config, store, req, session) {
+  const tier = tierForSession(config, session);
+  const quotaMode = quotaModeForSession(session);
+  const { windowId, resetAt } = quotaWindow();
+  const ownerSub = session?.sub || anonymousSubject(req);
+  const usageEntries = await Promise.all(QUOTA_KEYS.map((quotaKey) => store.getUsage(ownerSub, quotaKey, windowId)));
+  const usage = Object.fromEntries(usageEntries.map((entry) => {
+    const limit = quotaLimitFor(tier, entry.quotaKey, quotaMode);
+    return [entry.quotaKey, {
+      used: entry.used,
+      limit: Number.isFinite(limit) ? limit : null,
+      remaining: Number.isFinite(limit) ? Math.max(0, limit - entry.used) : null,
+      resetAt: entry.resetAt || resetAt,
+    }];
+  }));
+
+  return {
+    ok: true,
+    authenticated: Boolean(session),
+    tier: tier ? {
+      id: tier.id,
+      name: tier.name,
+      access: tier.hidden ? 'Internal access' : tier.access,
+      minimum: tier.hidden ? 'Internal access only' : tier.minimum,
+    } : null,
+    quotaMode,
+    window: { id: windowId, resetAt },
+    quotas: {
+      active: quotaValuesForMode(tier, quotaMode),
+      full: quotaValuesForMode(tier, 'full'),
+      fresh: quotaValuesForMode(tier, 'fresh'),
+      usage,
+    },
+    tokenGate: session?.tokenGate || null,
   };
 }
 
@@ -1212,7 +1602,8 @@ async function requireQuota(config, store, req, res, session, quotaKey) {
   }
 
   const tier = tierForSession(config, session);
-  const limit = quotaLimitFor(tier, quotaKey);
+  const quotaMode = quotaModeForSession(session);
+  const limit = quotaLimitFor(tier, quotaKey, quotaMode);
   const { windowId, resetAt } = quotaWindow();
   const ownerSub = session?.sub || anonymousSubject(req);
   const result = await store.consumeUsage(ownerSub, quotaKey, limit, windowId, resetAt);
@@ -1220,6 +1611,7 @@ async function requireQuota(config, store, req, res, session, quotaKey) {
     ...result,
     tierId: tier?.id || 'unknown',
     tierName: tier?.name || 'Unknown',
+    quotaMode,
     windowId,
   };
 
@@ -1498,6 +1890,60 @@ async function searchBasePairs(query) {
   return uniquePairs(Array.isArray(search?.pairs) ? search.pairs : []);
 }
 
+function fulfilledValue(result, fallback = null) {
+  return result.status === 'fulfilled' ? result.value : fallback;
+}
+
+async function baseContractSnapshot(config, address) {
+  const normalized = normalizeAddress(address);
+  if (!normalized) {
+    return {
+      ok: false,
+      source: 'Base RPC',
+      status: 'address_required',
+      unknowns: ['contract bytecode', 'ERC-20 metadata'],
+    };
+  }
+
+  const client = createPublicClient({
+    chain: base,
+    transport: http(config?.baseRpcUrl || 'https://mainnet.base.org'),
+  });
+  const [bytecodeResult, nameResult, symbolResult, decimalsResult, supplyResult] = await Promise.allSettled([
+    client.getBytecode({ address: normalized }),
+    client.readContract({ address: normalized, abi: erc20Abi, functionName: 'name' }),
+    client.readContract({ address: normalized, abi: erc20Abi, functionName: 'symbol' }),
+    client.readContract({ address: normalized, abi: erc20Abi, functionName: 'decimals' }),
+    client.readContract({ address: normalized, abi: erc20Abi, functionName: 'totalSupply' }),
+  ]);
+  const bytecode = fulfilledValue(bytecodeResult, '');
+  const decimals = fulfilledValue(decimalsResult, null);
+  const totalSupply = fulfilledValue(supplyResult, null);
+  const hasErc20Metadata = nameResult.status === 'fulfilled' || symbolResult.status === 'fulfilled' || decimals !== null;
+  const unknowns = [];
+  if (!bytecode || bytecode === '0x') unknowns.push('contract bytecode');
+  if (!hasErc20Metadata) unknowns.push('ERC-20 metadata');
+
+  return {
+    ok: true,
+    source: 'Base RPC',
+    sourceUrl: `https://basescan.org/address/${normalized}`,
+    fetchedAt: new Date().toISOString(),
+    address: normalized,
+    hasBytecode: Boolean(bytecode && bytecode !== '0x'),
+    erc20: {
+      name: fulfilledValue(nameResult, null),
+      symbol: fulfilledValue(symbolResult, null),
+      decimals,
+      totalSupply: totalSupply !== null ? totalSupply.toString() : null,
+      totalSupplyFormatted: totalSupply !== null && decimals !== null
+        ? formatTokenAmount(formatUnits(totalSupply, decimals))
+        : null,
+    },
+    unknowns,
+  };
+}
+
 async function resolveOraclePairs(target) {
   const value = String(target || '').trim();
   const address = value.match(/0x[a-fA-F0-9]{40}/)?.[0];
@@ -1605,7 +2051,7 @@ function buildPulseLanes(pairs) {
   return { momentum, fresh, risk, undervalued };
 }
 
-async function oraclePayload(targetValue) {
+async function oraclePayload(targetValue, config = null) {
   const target = redactedPrompt(targetValue);
   if (!target) {
     throw Object.assign(new Error('Target is required.'), { status: 400 });
@@ -1625,12 +2071,23 @@ async function oraclePayload(targetValue) {
   }
 
   const primary = pairs[0];
+  const address = target.match(/0x[a-fA-F0-9]{40}/)?.[0] || primary?.baseToken?.address || '';
+  const contract = config && address
+    ? await baseContractSnapshot(config, address).catch((err) => ({
+        ok: false,
+        source: 'Base RPC',
+        sourceUrl: `https://basescan.org/address/${normalizeAddress(address)}`,
+        error: err instanceof Error ? err.message : String(err),
+        unknowns: ['contract bytecode', 'ERC-20 metadata'],
+      }))
+    : null;
   const normalized = pairs.slice(0, 8).map((pair, index) => normalizePair(pair, index === 0 ? 1 : 0, 'oracle'));
   return {
     ok: true,
     target,
     chainId: 'base',
     token: normalizePair(primary).token,
+    contract,
     primary: normalized[0],
     pairs: normalized,
     unknowns: [
@@ -1640,8 +2097,13 @@ async function oraclePayload(targetValue) {
       'LP lock state',
       'verified source code',
     ],
+    sources: [
+      { label: 'DEX Screener public API', ok: true, url: primary?.url || null },
+      { label: 'Base RPC contract metadata', ok: Boolean(contract?.ok), url: contract?.sourceUrl || null },
+    ],
     notes: [
-      'This Oracle view is source-backed by DEX Screener market/pair data only.',
+      'Market and pair data are source-backed by DEX Screener.',
+      'Contract bytecode and ERC-20 metadata are source-backed by Base RPC when a token address resolves.',
       'Unknown fields stay unknown until a wallet, explorer, or simulation source is connected.',
     ],
   };
@@ -1693,11 +2155,11 @@ async function hostedDataQuery(input, context) {
   if (type === 'pulse.lanes' || type === 'pulse.risk' || type === 'market.discovery') {
     payload = await pulsePayload();
   } else if (type === 'oracle.token') {
-    payload = await oraclePayload(isBaseAddress(target) ? target : KELYRA_REFERENCE_TOKEN_ADDRESS);
+    payload = await oraclePayload(isBaseAddress(target) ? target : KELYRA_REFERENCE_TOKEN_ADDRESS, context.config);
   } else if (type === 'market.search') {
-    payload = await oraclePayload(target || params.query || KELYRA_REFERENCE_TOKEN_ADDRESS);
+    payload = await oraclePayload(target || params.query || KELYRA_REFERENCE_TOKEN_ADDRESS, context.config);
   } else if (type === 'oracle.search') {
-    payload = target ? await oraclePayload(target) : await pulsePayload();
+    payload = target ? await oraclePayload(target, context.config) : await pulsePayload();
   } else if (type === 'receipts.list') {
     payload = {
       ok: true,
@@ -1819,7 +2281,7 @@ export function createKelyraApiServer(options = {}) {
       if (req.method === 'OPTIONS') {
         res.writeHead(204, responseHeaders(config, req, {
           'access-control-allow-headers': 'content-type',
-          'access-control-allow-methods': 'GET,POST,OPTIONS',
+          'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
           'access-control-max-age': '600',
         }));
         res.end();
@@ -1892,10 +2354,17 @@ export function createKelyraApiServer(options = {}) {
 	            } : null,
 	            wallet: session.wallet || null,
             tokenGate: session.tokenGate || null,
+            quotaMode: quotaModeForSession(session),
             iat: session.iat,
             exp: session.exp,
           } : null,
         });
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/quota/profile') {
+        const session = getSession(config, req);
+        json(config, req, res, 200, await quotaProfile(config, store, req, session));
         return;
       }
 
@@ -1911,6 +2380,7 @@ export function createKelyraApiServer(options = {}) {
 	          sub: 'access-code',
 	          authMode: 'access-code',
 	          tierId: config.tierConfig.accessCodeTierId,
+	          quotaMode: 'full',
 	          iat: now,
           exp: now + config.sessionTtlSeconds,
         });
@@ -1980,6 +2450,7 @@ export function createKelyraApiServer(options = {}) {
           json(config, req, res, 403, { ok: false, error: 'TOKEN_HOLDER_REQUIRED', tokenGate });
           return;
         }
+        const quotaTokenGate = await applyHolderQuotaMode(config, store, address, tokenGate);
 
         const now = Math.floor(Date.now() / 1000);
         const token = signSession(config, {
@@ -1987,8 +2458,9 @@ export function createKelyraApiServer(options = {}) {
           sub: `wallet:${address}`,
 	          authMode: 'wallet',
 	          wallet: { address, chainId: BASE_CHAIN_ID },
-	          tokenGate,
-	          tierId: tokenGate.tierId,
+	          tokenGate: quotaTokenGate,
+	          tierId: quotaTokenGate.tierId,
+	          quotaMode: quotaTokenGate.quotaMode,
 	          iat: now,
           exp: now + config.sessionTtlSeconds,
         });
@@ -1996,8 +2468,8 @@ export function createKelyraApiServer(options = {}) {
           ok: true,
           authenticated: true,
 	          wallet: { address, chainId: BASE_CHAIN_ID },
-	          tokenGate,
-	          tier: tokenGate.tierId ? { id: tokenGate.tierId, name: tokenGate.tierName } : null,
+	          tokenGate: quotaTokenGate,
+	          tier: quotaTokenGate.tierId ? { id: quotaTokenGate.tierId, name: quotaTokenGate.tierName } : null,
 	        }, {
           'set-cookie': sessionCookie(config, token),
         });
@@ -2022,7 +2494,7 @@ export function createKelyraApiServer(options = {}) {
 	        const body = await readJsonBody(req);
 	        const quota = await requireQuota(config, store, req, res, getSession(config, req), 'oracleMessages');
 	        if (!quota) return;
-	        json(config, req, res, 200, { ...(await oraclePayload(body.target || body.prompt)), quota }, quotaHeaders(quota));
+	        json(config, req, res, 200, { ...(await oraclePayload(body.target || body.prompt, config)), quota }, quotaHeaders(quota));
 	        return;
 	      }
 
@@ -2138,6 +2610,94 @@ export function createKelyraApiServer(options = {}) {
           return;
         }
         json(config, req, res, 200, { ok: true, app: publicForgeApp(app) });
+        return;
+      }
+
+      if (req.method === 'PATCH' && appMatch) {
+        const session = requireSession(config, req, res);
+        if (!session) return;
+        const app = await getOwnedApp(store, session, appMatch[1]);
+        if (!app) {
+          json(config, req, res, 404, { ok: false, error: 'APP_NOT_FOUND' });
+          return;
+        }
+        const body = await readJsonBody(req);
+        const prompt = String(body.prompt || body.brief || app.promptPreview || app.title || '').trim();
+        if (!prompt) {
+          json(config, req, res, 400, { ok: false, error: 'PROMPT_REQUIRED' });
+          return;
+        }
+        if (prompt.length > 4000) {
+          json(config, req, res, 400, { ok: false, error: 'PROMPT_TOO_LONG' });
+          return;
+        }
+        const quota = await requireQuota(config, store, req, res, session, 'buildActions');
+        if (!quota) return;
+        const job = await store.createProofJob({
+          prompt: `Hosted Forge revision: ${prompt}`,
+          ownerSub: session.sub,
+          workspaceRef: `hosted-forge:${app.slug}`,
+          runnerMode: config.runnerMode,
+        });
+        const updated = buildForgeApp({
+          prompt,
+          ownerSub: session.sub,
+          proofJobId: job.id,
+          previous: app,
+          status: 'draft',
+        });
+        await store.updateForgeApp(updated);
+        json(config, req, res, 200, { ok: true, app: publicForgeApp(updated), job, quota }, quotaHeaders(quota));
+        return;
+      }
+
+      if (req.method === 'DELETE' && appMatch) {
+        const session = requireSession(config, req, res);
+        if (!session) return;
+        const deleted = await store.deleteForgeApp(appMatch[1], session.sub);
+        if (!deleted) {
+          json(config, req, res, 404, { ok: false, error: 'APP_NOT_FOUND' });
+          return;
+        }
+        json(config, req, res, 200, { ok: true, deleted: true });
+        return;
+      }
+
+      const publishMatch = url.pathname.match(/^\/api\/apps\/([^/]+)\/publish$/);
+      if (req.method === 'POST' && publishMatch) {
+        const session = requireSession(config, req, res);
+        if (!session) return;
+        const app = await getOwnedApp(store, session, publishMatch[1]);
+        if (!app) {
+          json(config, req, res, 404, { ok: false, error: 'APP_NOT_FOUND' });
+          return;
+        }
+        const published = {
+          ...app,
+          status: 'published',
+          updatedAt: new Date().toISOString(),
+          publishedAt: new Date().toISOString(),
+          publicUrl: app.previewUrl || `/api/apps/${app.slug}/preview`,
+        };
+        await store.updateForgeApp(published);
+        json(config, req, res, 200, { ok: true, app: publicForgeApp(published) });
+        return;
+      }
+
+      const assetMatch = url.pathname.match(/^\/api\/apps\/([^/]+)\/assets\/([^/]+)$/);
+      if (req.method === 'GET' && assetMatch) {
+        const session = requireSession(config, req, res);
+        if (!session) return;
+        const app = await getOwnedApp(store, session, assetMatch[1]);
+        const assetName = assetMatch[2];
+        const content = app?.assets?.[assetName];
+        if (!app || content === undefined) {
+          json(config, req, res, 404, { ok: false, error: 'ASSET_NOT_FOUND' });
+          return;
+        }
+        const type = mimeTypes.get(extname(assetName).toLowerCase()) || 'text/plain; charset=utf-8';
+        res.writeHead(200, responseHeaders(config, req, { 'content-type': type }));
+        res.end(content);
         return;
       }
 

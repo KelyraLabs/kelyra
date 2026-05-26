@@ -86,7 +86,10 @@ describe('Kelyra hosted API', () => {
       assert.equal(body.schema, 'kelyra.tiers.v1');
       assert.equal(body.enforced, true);
       assert.equal(body.tiers.length, 4);
+      assert.equal(body.internalTiers, undefined);
+      assert.equal(body.accessCodeTierId, undefined);
       assert.ok(body.tiers.some((tier: any) => tier.id === 'basic' && tier.tokenMinimum === '5000000'));
+      assert.ok(body.tiers.some((tier: any) => tier.id === 'basic' && tier.freshDailyQuota.buildActions === 1));
       assert.ok(body.tiers.some((tier: any) => tier.id === 'ultimate' && tier.tokenMinimum === '1000000000'));
       assert.ok(body.quotaTypes.some((type: any) => type.id === 'buildActions'));
       assert.equal(body.gate.tokenGate.thresholds[0].tierId, 'basic');
@@ -171,6 +174,7 @@ describe('Kelyra hosted API', () => {
         tierId: 'pro',
         tierName: 'Pro',
         tierMinimum: '100,000,000 KELYRA',
+        quotaMode: 'full',
       }),
     });
     try {
@@ -223,7 +227,111 @@ describe('Kelyra hosted API', () => {
       });
       assert.equal(created.status, 201);
       assert.equal(created.headers.get('x-kelyra-quota-tier'), 'pro');
+      assert.equal(created.headers.get('x-kelyra-quota-mode'), 'full');
       assert.equal(created.headers.get('x-kelyra-quota-remaining'), '0');
+    } finally {
+      await api.close();
+    }
+  });
+
+  it('reports active quota profile without exposing internal tiers publicly', async () => {
+    const api = await startApi();
+    try {
+      const publicProfile = await fetch(`${api.baseUrl}/api/quota/profile`);
+      const publicBody = await publicProfile.json();
+      assert.equal(publicProfile.status, 200);
+      assert.equal(publicBody.ok, true);
+      assert.equal(publicBody.tier.id, 'basic');
+      assert.equal(publicBody.quotaMode, 'full');
+      assert.equal(publicBody.quotas.active.buildActions, 3);
+
+      const cookie = await login(api.baseUrl);
+      const privateProfile = await fetch(`${api.baseUrl}/api/quota/profile`, {
+        headers: { cookie },
+      });
+      const privateBody = await privateProfile.json();
+      assert.equal(privateProfile.status, 200);
+      assert.equal(privateBody.tier.id, 'operator');
+      assert.equal(privateBody.tier.access, 'Internal access');
+      assert.equal(privateBody.quotas.active.buildActions, 120);
+    } finally {
+      await api.close();
+    }
+  });
+
+  it('uses fresh holder quota until a previous UTC snapshot qualifies for the same tier', async () => {
+    const api = await startApi({
+      env: {
+        KELYRA_REQUIRE_TOKEN_HOLDER: 'true',
+        KELYRA_TOKEN_ADDRESS: '0x4200000000000000000000000000000000000006',
+        KELYRA_PRO_BUILD_DAILY: '3',
+        KELYRA_PRO_FRESH_BUILD_DAILY: '1',
+      },
+      tokenHolderStatus: async (config) => ({
+        required: true,
+        ok: true,
+        chainId: 8453,
+        tokenAddress: config.tokenAddress,
+        symbol: 'KELYRA',
+        decimals: 18,
+        balance: '120000000000000000000000000',
+        balanceFormatted: '120,000,000',
+        minimum: '5000000000000000000000000',
+        minimumFormatted: '5,000,000 KELYRA',
+        thresholds: [],
+        tierId: 'pro',
+        tierName: 'Pro',
+        tierMinimum: '100,000,000 KELYRA',
+      }),
+    });
+    try {
+      const account = privateKeyToAccount(generatePrivateKey());
+      const nonce = await fetch(`${api.baseUrl}/api/auth/wallet/nonce`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://127.0.0.1:4340',
+        },
+        body: JSON.stringify({ address: account.address }),
+      });
+      const nonceBody = await nonce.json();
+      const signature = await account.signMessage({ message: nonceBody.message });
+      const verified = await fetch(`${api.baseUrl}/api/auth/wallet/verify`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://127.0.0.1:4340',
+        },
+        body: JSON.stringify({
+          address: account.address,
+          message: nonceBody.message,
+          signature,
+        }),
+      });
+      const verifiedBody = await verified.json();
+      assert.equal(verified.status, 200);
+      assert.equal(verifiedBody.tokenGate.quotaMode, 'fresh');
+
+      const cookie = verified.headers.get('set-cookie') || '';
+      const profile = await fetch(`${api.baseUrl}/api/quota/profile`, {
+        headers: { cookie },
+      });
+      const profileBody = await profile.json();
+      assert.equal(profileBody.quotaMode, 'fresh');
+      assert.equal(profileBody.quotas.active.buildActions, 1);
+
+      const created = await fetch(`${api.baseUrl}/api/apps/build`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          cookie,
+          origin: 'http://127.0.0.1:4340',
+        },
+        body: JSON.stringify({ prompt: 'Build a fresh holder quota dashboard' }),
+      });
+      assert.equal(created.status, 201);
+      assert.equal(created.headers.get('x-kelyra-quota-mode'), 'fresh');
+      assert.equal(created.headers.get('x-kelyra-quota-limit'), '1');
     } finally {
       await api.close();
     }
@@ -347,6 +455,9 @@ describe('Kelyra hosted API', () => {
       assert.equal(createdBody.ok, true);
       assert.equal(createdBody.app.kind, 'market-dashboard');
       assert.equal(createdBody.app.assets, undefined);
+      assert.equal(createdBody.app.version, 1);
+      assert.ok(createdBody.app.files.some((file: any) => file.path === 'app.js'));
+      assert.ok(createdBody.app.files.some((file: any) => file.path === 'styles.css'));
       assert.ok(createdBody.app.previewUrl.includes('/api/apps/'));
       assert.ok(createdBody.job.id.startsWith('job_'));
 
@@ -365,13 +476,49 @@ describe('Kelyra hosted API', () => {
       assert.equal(preview.status, 200);
       assert.match(previewBody, /window\.kelyraQuery/);
       assert.match(previewBody, /Run bridge query/);
+
+      const asset = await fetch(`${api.baseUrl}/api/apps/${createdBody.app.slug}/assets/manifest.json`, {
+        headers: { cookie },
+      });
+      const assetBody = await asset.json();
+      assert.equal(asset.status, 200);
+      assert.equal(assetBody.slug, createdBody.app.slug);
+
+      const updated = await fetch(`${api.baseUrl}/api/apps/${createdBody.app.slug}`, {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          cookie,
+          origin: 'http://127.0.0.1:4340',
+        },
+        body: JSON.stringify({ prompt: 'Revise into a proof workspace with receipt timeline' }),
+      });
+      const updatedBody = await updated.json();
+      assert.equal(updated.status, 200);
+      assert.equal(updatedBody.app.slug, createdBody.app.slug);
+      assert.equal(updatedBody.app.version, 2);
+      assert.equal(updatedBody.app.kind, 'proof-workspace');
+
+      const published = await fetch(`${api.baseUrl}/api/apps/${createdBody.app.slug}/publish`, {
+        method: 'POST',
+        headers: { cookie, origin: 'http://127.0.0.1:4340' },
+      });
+      const publishedBody = await published.json();
+      assert.equal(published.status, 200);
+      assert.equal(publishedBody.app.status, 'published');
+
+      const deleted = await fetch(`${api.baseUrl}/api/apps/${createdBody.app.slug}`, {
+        method: 'DELETE',
+        headers: { cookie, origin: 'http://127.0.0.1:4340' },
+      });
+      assert.equal(deleted.status, 200);
     } finally {
       await api.close();
     }
   });
 
-  it('enforces the daily Forge build quota for authenticated sessions', async () => {
-    const api = await startApi({ env: { KELYRA_BASIC_BUILD_DAILY: '1' } });
+  it('enforces the daily Forge build quota for authenticated access-code sessions', async () => {
+    const api = await startApi({ env: { KELYRA_OPERATOR_BUILD_DAILY: '1' } });
     try {
       const cookie = await login(api.baseUrl);
       const headers = {
@@ -387,6 +534,8 @@ describe('Kelyra hosted API', () => {
       });
       assert.equal(first.status, 201);
       assert.equal(first.headers.get('x-kelyra-quota-key'), 'buildActions');
+      assert.equal(first.headers.get('x-kelyra-quota-tier'), 'operator');
+      assert.equal(first.headers.get('x-kelyra-quota-mode'), 'full');
       assert.equal(first.headers.get('x-kelyra-quota-remaining'), '0');
 
       const second = await fetch(`${api.baseUrl}/api/apps/build`, {
@@ -397,7 +546,7 @@ describe('Kelyra hosted API', () => {
       const secondBody = await second.json();
       assert.equal(second.status, 429);
       assert.equal(secondBody.error, 'QUOTA_EXCEEDED');
-      assert.equal(secondBody.quota.tierId, 'basic');
+      assert.equal(secondBody.quota.tierId, 'operator');
       assert.equal(secondBody.quota.quotaKey, 'buildActions');
     } finally {
       await api.close();
