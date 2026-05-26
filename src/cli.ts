@@ -1,0 +1,379 @@
+#!/usr/bin/env node
+// ─────────────────────────────────────────────────────────────
+//  kelyra :: cli.ts
+//  Main CLI entry point — Commander.js program
+// ─────────────────────────────────────────────────────────────
+
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Command } from 'commander';
+import { chatCommand, runCommand } from './commands/chat.js';
+
+// ── Suppress Node.js experimental warnings (SQLite) ─────────
+// These leak into terminal output and break polished CLI feel.
+const originalEmit = process.emit.bind(process);
+// @ts-ignore — intentional override to filter warnings
+process.emit = function (event: string, ...args: unknown[]) {
+  if (event === 'warning' && (args[0] as { name?: string })?.name === 'ExperimentalWarning') {
+    return false;
+  }
+  return originalEmit(event, ...args);
+};
+import { verifyCommand } from './commands/verify.js';
+import { dreamCommand } from './commands/dream.js';
+import { statsCommand } from './commands/stats.js';
+import { providersCommand } from './commands/providers.js';
+import { initCommand } from './commands/init.js';
+import { receiptsCommand } from './commands/receipts.js';
+import { skillsCommand } from './commands/skills.js';
+import { learnCommand } from './commands/learn.js';
+import { swdCommand } from './commands/swd.js';
+import { mcpCommand } from './commands/mcp.js';
+import { policyCommand } from './commands/policy.js';
+import { proofCommand } from './commands/proof.js';
+import { manifestCommand } from './commands/manifest.js';
+import { viewerCommand } from './commands/viewer.js';
+import { setupCICommand } from './commands/setup-ci.js';
+import { consoleCommand } from './commands/console.js';
+import {
+  DEFAULT_MAX_TOKENS_PER_SESSION,
+  DEFAULT_MAX_TURNS,
+} from './config.js';
+import { BANNER } from './utils.js';
+
+// ── Read version from package.json (single source of truth) ──
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8'));
+
+const program = new Command();
+
+// ── Restore cursor on any exit (spinner crash safety) ────────
+// IMPORTANT: Only use 'exit' and 'uncaughtExceptionMonitor' here.
+// - 'exit' fires on every process termination, guaranteed cursor restore.
+// - Adding a 'SIGINT' listener suppresses Node's default Ctrl+C exit,
+//   which breaks non-chat commands (e.g. providers --watch).
+// - 'uncaughtExceptionMonitor' observes crashes without preempting
+//   command-level shutdown (chat.ts has its own finalize/save logic).
+const restoreCursor = () => {
+  if (process.stdout.isTTY) {
+    process.stdout.write('\x1b[?25h');
+  } else if (process.stderr.isTTY) {
+    process.stderr.write('\x1b[?25h');
+  }
+};
+process.on('exit', restoreCursor);
+process.on('uncaughtExceptionMonitor', restoreCursor);
+
+program
+  .name('kelyra')
+  .description(
+    'Governed agent execution with Strict Write Discipline, signed receipts, ' +
+    'policy-as-code, and CI proof bundles.',
+  )
+  .version(pkg.version);
+
+// ── kelyra chat ──────────────────────────────────────────────
+program
+  .command('chat')
+  .description('Interactive chat with SWD verification and receipt tracking')
+  .option(
+    '-e, --effort <level>',
+    'Thinking effort: high (default), medium, low',
+    'high',
+  )
+  .option(
+    '--max-tokens <n>',
+    `Max tokens per session (default: ${DEFAULT_MAX_TOKENS_PER_SESSION.toLocaleString()})`,
+    String(DEFAULT_MAX_TOKENS_PER_SESSION),
+  )
+  .option(
+    '--max-turns <n>',
+    `Max turns per session (default: ${DEFAULT_MAX_TURNS})`,
+    String(DEFAULT_MAX_TURNS),
+  )
+  .option(
+    '--no-budget',
+    'Disable budget limits (expert mode — use at your own risk)',
+  )
+  .option(
+    '--dry-run',
+    'Preview all file operations without executing them',
+  )
+  .option(
+    '--verbose',
+    'Show detailed SWD traces and memory operations',
+  )
+  .option(
+    '-b, --branch <name>',
+    'Run session in a new git branch for sandboxed reasoning',
+  )
+  .option(
+    '-t, --test-cmd <cmd>',
+    'Command to run after successful SWD execution (prompts before running if model changed command-affecting files)',
+  )
+  .option(
+    '--max-test-retries <n>',
+    'Maximum number of times Claude can attempt to fix failing tests',
+    '3',
+  )
+  .option(
+    '-s, --skill <names...>',
+    'Load verified skill packs (e.g., -s repo -s security-review)',
+  )
+  .option(
+    '--provider <id>',
+    'Force provider for chat/run: anthropic, openai, or deepseek',
+  )
+  .option(
+    '--no-fallback',
+    'Disable provider fallback for this session',
+  )
+  .option(
+    '--resume',
+    'Resume the last saved session (history + budget state)',
+  )
+  .action(chatCommand);
+
+// kelyra run
+program
+  .command('run')
+  .description('Run one prompt through Kelyra and exit after SWD verification')
+  .argument('[prompt...]', 'Prompt to run once')
+  .option(
+    '--file <path>',
+    'Read the one-shot prompt from a local file',
+  )
+  .option(
+    '--stdin',
+    'Read the one-shot prompt from piped standard input',
+  )
+  .option(
+    '-e, --effort <level>',
+    'Thinking effort: high (default), medium, low',
+    'high',
+  )
+  .option(
+    '--max-tokens <n>',
+    `Max tokens for this run (default: ${DEFAULT_MAX_TOKENS_PER_SESSION.toLocaleString()})`,
+    String(DEFAULT_MAX_TOKENS_PER_SESSION),
+  )
+  .option(
+    '--max-turns <n>',
+    'Max model turns for this run (default: one prompt plus bounded repair turns)',
+  )
+  .option(
+    '--no-budget',
+    'Disable budget limits (expert mode - use at your own risk)',
+  )
+  .option(
+    '--dry-run',
+    'Preview all file operations without executing them',
+  )
+  .option(
+    '--verbose',
+    'Show detailed SWD traces and memory operations',
+  )
+  .option(
+    '-b, --branch <name>',
+    'Run in a new git branch for sandboxed reasoning',
+  )
+  .option(
+    '-t, --test-cmd <cmd>',
+    'Command to run after successful SWD execution (prompts before running if model changed command-affecting files)',
+  )
+  .option(
+    '--max-test-retries <n>',
+    'Maximum number of times Claude can attempt to fix failing tests',
+    '3',
+  )
+  .option(
+    '-s, --skill <names...>',
+    'Load verified skill packs (e.g., -s repo -s security-review)',
+  )
+  .option(
+    '--provider <id>',
+    'Force provider for chat/run: anthropic, openai, or deepseek',
+  )
+  .option(
+    '--no-fallback',
+    'Disable provider fallback for this run',
+  )
+  .action((prompt: string[] | undefined, options: Parameters<typeof runCommand>[1]) => runCommand((prompt ?? []).join(' '), options));
+
+// ── kelyra swd ───────────────────────────────────────────────
+program
+  .command('swd')
+  .description('Apply external-agent file actions through model-free Strict Write Discipline')
+  .argument('[action]', 'apply', 'apply')
+  .option('--stdin', 'Read external-agent FILE_ACTION or JSON input from stdin')
+  .option('--file <path>', 'Read external-agent FILE_ACTION or JSON input from a file')
+  .option('--json', 'Print machine-readable JSON output')
+  .option('--dry-run', 'Verify the plan without writing files or receipts')
+  .option('--no-rollback', 'Disable rollback on failed verification')
+  .option('--no-receipt', 'Do not save a SWD receipt')
+  .option('--allow-risky', 'Allow high-impact actions that normally require human confirmation; sensitive files remain blocked')
+  .option('--request <text>', 'Receipt request label for external-agent runs')
+  .option('--summary <text>', 'Receipt summary override')
+  .option('--agent <id>', 'External agent identifier for receipts')
+  .option('--model <id>', 'External agent model identifier for receipts')
+  .action(swdCommand);
+
+// MCP stdio adapter for external agent tools
+program
+  .command('mcp')
+  .description('Run the Kelyra MCP stdio server for SWD, receipts, and skills tools')
+  .action(mcpCommand);
+
+// ── kelyra verify ────────────────────────────────────────────
+program
+  .command('verify')
+  .description('Verify memory drift locally or run read-only CI checks for PR changes')
+  .option(
+    '--dry-run',
+    'Preview verification without writing to MEMORY.md',
+  )
+  .option(
+    '--ci',
+    'Run read-only GitHub CI verification against the current PR/diff',
+  )
+  .option(
+    '--strict',
+    'In CI mode, fail on warnings as well as high-severity findings',
+  )
+  .option(
+    '--json',
+    'In CI mode, print machine-readable JSON',
+  )
+  .option(
+    '--base <ref>',
+    'In CI mode, compare against a specific base ref (default: GitHub base ref or HEAD~1)',
+  )
+  .action(verifyCommand);
+
+// ── kelyra dream ─────────────────────────────────────────────
+program
+  .command('dream')
+  .description('Summarize and compress agentic memory for context optimization')
+  .option('-f, --force', 'Force dream even with few entries', false)
+  .option(
+    '--dry-run',
+    'Preview compression without writing to MEMORY.md',
+  )
+  .action(dreamCommand);
+
+// ── kelyra stats ─────────────────────────────────────────────
+program
+  .command('stats')
+  .description('Show budget analytics and token usage across sessions')
+  .option('-d, --days <n>', 'Filter metrics by the last N days')
+  .action(statsCommand);
+
+// ── kelyra providers ─────────────────────────────────────────
+program
+  .command('providers')
+  .description('Check provider key readiness or view the provider telemetry dashboard')
+  .argument('[action]', 'check | dashboard', 'dashboard')
+  .option('-w, --watch', 'Auto-refresh the dashboard when metrics change')
+  .option('--verbose', 'Show full error stacks for recent failures')
+  .option('--json', 'Print machine-readable provider readiness when used with check')
+  .action(providersCommand);
+
+// SWD receipt inspection and drift verification
+program
+  .command('receipts')
+  .description('List, inspect, and verify SWD trust receipts')
+  .argument('[action]', 'list | show | verify | latest | chain | keygen | sign')
+  .argument('[target]', 'receipt id, latest, or key path for keygen')
+  .option('-n, --limit <n>', 'Number of receipts to show when listing', '10')
+  .option('--json', 'Print machine-readable JSON')
+  .option('--key <path>', 'Private Ed25519 key for signing receipts')
+  .option('--force', 'Overwrite an existing receipt signing key when used with keygen')
+  .action(receiptsCommand);
+
+// Project policy inspection and scaffolding
+program
+  .command('policy')
+  .description('Inspect, validate, or scaffold project Kelyra policy')
+  .argument('[action]', 'check | show | templates | init')
+  .option('--json', 'Print machine-readable JSON')
+  .option('--force', 'Overwrite existing policy when used with init')
+  .option('--template <name>', 'Policy template for init: default, team, or strict', 'default')
+  .action(policyCommand);
+
+program
+  .command('setup-ci')
+  .description('Scaffold a GitHub Actions verification workflow and optional Kelyra policy')
+  .option('--force', 'Overwrite existing workflow and policy files')
+  .option('--strict', 'Fail CI on warnings and scaffold the strict policy template by default')
+  .option('--no-policy', 'Only scaffold the GitHub Actions workflow')
+  .option('--policy-template <name>', 'Policy template: default, team, or strict')
+  .action(setupCICommand);
+
+program
+  .command('proof')
+  .description('Create and inspect portable SWD proof bundles')
+  .argument('[action]', 'export | show')
+  .argument('[target]', 'receipt id or latest')
+  .option('--json', 'Print machine-readable JSON')
+  .option('--out <dir>', 'Directory for exported proof bundle')
+  .action(proofCommand);
+
+program
+  .command('manifest')
+  .description('Inspect or scaffold local external-agent manifest')
+  .argument('[action]', 'show | check | init')
+  .option('--json', 'Print machine-readable JSON')
+  .option('--force', 'Overwrite existing manifest when used with init')
+  .action(manifestCommand);
+
+program
+  .command('console')
+  .description('Run the local Kelyra Console bridge for SWD proof runs')
+  .option('--port <n>', 'Local console port', '4340')
+  .option('--host <host>', 'Local console host', '127.0.0.1')
+  .action(consoleCommand);
+
+program
+  .command('viewer')
+  .description('Run a local web viewer for SWD receipt proof bundles')
+  .option('--port <n>', 'Local viewer port', '4327')
+  .option('--target <id>', 'Receipt id or latest', 'latest')
+  .action(viewerCommand);
+
+// Kelyra skill pack management
+program
+  .command('skills')
+  .description('List, inspect, create, and validate Kelyra skill packs')
+  .argument('[action]', 'list | show | new | check')
+  .argument('[name]', 'skill name or path')
+  .option('--global', 'Create a user-global skill instead of a project-local skill')
+  .option('--force', 'Overwrite an existing skill when used with new')
+  .option('--json', 'Print machine-readable JSON')
+  .action(skillsCommand);
+
+// Repo skill learning
+program
+  .command('learn')
+  .description('Generate a repo-local skill pack from detected project structure')
+  .option('--name <name>', 'Project skill name to create', 'repo')
+  .option('--force', 'Overwrite an existing generated skill')
+  .option('--dry-run', 'Preview the generated skill without writing files')
+  .option('--json', 'Print machine-readable JSON')
+  .action(learnCommand);
+
+// ── kelyra init ──────────────────────────────────────────────
+program
+  .command('init')
+  .description('Initialize Kelyra in the current project')
+  .option('-f, --force', 'Re-scaffold files even if they already exist')
+  .option('--check', 'Run environment and project setup checks without writing files')
+  .action(initCommand);
+
+// ── Default: show help ───────────────────────────────────────
+if (process.argv.length <= 2) {
+  console.log(BANNER);
+  program.help();
+} else {
+  program.parseAsync();
+}

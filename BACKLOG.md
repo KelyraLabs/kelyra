@@ -1,0 +1,63 @@
+# BACKLOG.md — Kelyra
+
+> Engineering considerations that are correct but not user-impacting under current scale.
+> Revisit when SDK usage becomes external or system operates under sustained high concurrency.
+
+---
+
+## Runtime Hygiene
+
+### Dream duration tracking
+- **Component**: `dream.ts`
+- **Behavior**: `durationMs` is currently hardcoded as 0
+- **Improvement**: Capture start timestamp before execution and compute elapsed time
+- **Impact**: None (observability-only correction)
+
+---
+
+## System Robustness (Scale-Dependent)
+
+### Orchestrator complexity surface area
+- **Component**: `orchestrator.ts`
+- **Behavior under scale**: Routing logic includes scoring, fallback chains, and circuit breaker logic without automated coverage
+- **Consideration**: Increases refactor risk and onboarding cost for external contributors
+- **Revisit when**: Orchestrator becomes a stable external SDK dependency or undergoes major refactor
+
+### Concurrent execution safety
+- **Component**: `orchestrator.ts` (SDK surface)
+- **Behavior under scale**: Concurrent `streamMessage` invocations may expose race conditions in concurrency control or telemetry aggregation
+- **Consideration**: Currently low probability in CLI usage; increases under programmatic SDK adoption
+- **Revisit when**: SDK is used in parallel request-heavy environments
+
+---
+
+## Context Management
+
+### Token estimation accuracy
+- **Component**: `chat.ts` (Context Guard)
+- **Behavior under scale**: Length-based estimation may undercount structured or code-dense inputs
+- **Consideration**: Risk of premature truncation or unexpected API boundary hits
+- **Revisit when**: Users report reliability issues with long or structured conversations
+
+### Compression ratio stability
+- **Component**: `chat.ts` (Context Guard)
+- **Behavior under scale**: Fixed 60% history compression may be suboptimal across mixed-density sessions
+- **Consideration**: Can lead to either over-compression (loss of detail) or under-compression (context overflow risk)
+- **Revisit when**: Context retention quality becomes a reported usability concern
+
+### Recursive compression degradation
+- **Component**: `chat.ts` (Context Guard)
+- **Behavior under scale**: Repeated compression cycles may reduce information fidelity over long sessions
+- **Consideration**: Risk of "summary-of-summary" drift in extreme usage patterns
+- **Revisit when**: Long-running sessions become a primary usage pattern
+
+---
+
+## Nice-to-Have (Engineering Improvements)
+
+| Area | Consideration |
+|------|------|
+| CLI output serialization | Add `--json` mode for CI and automation usage |
+| Error classification | Replace string-matching with structured error types in orchestrator |
+| Telemetry query robustness | Replace ID-based pagination with deterministic ordering (`ORDER BY id DESC LIMIT`) |
+| Storage scalability | Current JSON-based metrics storage is sufficient until large session volumes (~5k+ sessions) |

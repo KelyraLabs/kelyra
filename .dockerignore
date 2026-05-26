@@ -1,0 +1,8 @@
+.git
+node_modules
+npm-debug.log
+.DS_Store
+.kelyra
+.kelyra-cloud-dev
+coverage
+dist

@@ -1,0 +1,40 @@
+name: Kelyra Verify
+description: Read-only CI verification for Kelyra/SWD receipts and high-risk repository changes.
+
+inputs:
+  strict:
+    description: Fail on warnings as well as high-severity findings.
+    required: false
+    default: 'false'
+  base:
+    description: Optional base ref passed to kelyra verify --ci --base.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install action dependencies
+      shell: bash
+      run: npm --prefix "$GITHUB_ACTION_PATH" ci --no-audit --no-fund
+
+    - name: Build action CLI
+      shell: bash
+      run: npm --prefix "$GITHUB_ACTION_PATH" run build
+
+    - name: Run Kelyra verification
+      shell: bash
+      run: |
+        cmd=(node "$GITHUB_ACTION_PATH/dist/cli.js" verify --ci)
+        if [ "${{ inputs.strict }}" = "true" ]; then
+          cmd+=(--strict)
+        fi
+        if [ -n "${{ inputs.base }}" ]; then
+          cmd+=(--base "${{ inputs.base }}")
+        fi
+        "${cmd[@]}"

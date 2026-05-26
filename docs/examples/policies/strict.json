@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "blockedPaths": [
+    ".env*",
+    ".npmrc",
+    ".ssh/",
+    "**/*private*key*",
+    "**/*.pem",
+    "**/secrets/**"
+  ],
+  "confirmPaths": [
+    "package.json",
+    "package-lock.json",
+    ".github/workflows/",
+    "Dockerfile",
+    "docker-compose*.yml",
+    "scripts/",
+    "bin/"
+  ],
+  "trustedReceiptKeyIds": [],
+  "requireSignedReceipts": true,
+  "requireReceiptForCI": true,
+  "maxWritableActionContentBytes": 150000,
+  "maxPatchBytes": 25000,
+  "allowedTestCommands": [
+    "npm test",
+    "npm run test",
+    "npm run build",
+    "npm run lint"
+  ],
+  "sandboxTestCommands": true,
+  "requireTestsForPaths": [
+    "src/",
+    "test/",
+    "package.json",
+    "package-lock.json",
+    ".github/workflows/",
+    "scripts/"
+  ],
+  "receiptChain": true
+}

@@ -1,0 +1,93 @@
+{
+  "name": "kelyra",
+  "version": "1.13.0",
+  "description": "Governed agent execution with Strict Write Discipline, signed receipts, policy-as-code, and CI proof bundles",
+  "type": "module",
+  "bin": {
+    "kelyra": "dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./cli": "./dist/cli.js",
+    "./mcp": "./dist/mcp.js"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "site",
+    "backend",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "AGENTS.md"
+  ],
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "test": "node --import tsx --test \"test/**/*.test.ts\"",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/cli.js",
+    "chat": "tsx src/cli.ts chat",
+    "verify": "tsx src/cli.ts verify",
+    "dream": "tsx src/cli.ts dream",
+    "stats": "tsx src/cli.ts stats",
+    "mcp": "tsx src/cli.ts mcp",
+    "init": "tsx src/cli.ts init",
+    "rebuild": "tsx -e \"import { rebuildIndex } from './src/memory.js'; rebuildIndex();\"",
+    "backend:dev": "node backend/server.mjs",
+    "backend:start": "node backend/server.mjs",
+    "backend:worker": "node backend/worker.mjs",
+    "backend:smoke": "node backend/smoke-live.mjs"
+  },
+  "keywords": [
+    "claude",
+    "opus",
+    "anthropic",
+    "kelyra",
+    "agent-governance",
+    "ai-provenance",
+    "proof-bundles",
+    "adaptive-thinking",
+    "ai-agent",
+    "cli",
+    "agent",
+    "llm",
+    "developer-tools",
+    "coding-assistant",
+    "filesystem-verification",
+    "strict-write-discipline",
+    "swd",
+    "external-agent",
+    "agent-verification",
+    "agent-security",
+    "mcp",
+    "model-context-protocol",
+    "byok"
+  ],
+  "author": "Kelyra contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kelyra-labs/kelyra.git"
+  },
+  "homepage": "https://github.com/kelyra-labs/kelyra",
+  "bugs": {
+    "url": "https://github.com/kelyra-labs/kelyra/issues"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1",
+    "commander": "^14.0.3",
+    "pg": "^8.21.0",
+    "viem": "^2.51.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.19.0",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
