@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kelyra Tiers</title>
+    <meta name="description" content="Kelyra hosted access tiers, daily quotas, and safety limits.">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Kelyra home">
+        <span class="brand-k">kelyra</span>
+      </a>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="./index.html#features">Product</a>
+        <a href="./protocol.html">Protocol</a>
+        <a href="./tiers.html">Tiers</a>
+        <a href="./index.html#start">Install</a>
+        <a class="nav-pill" href="./console.html">Console</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero tiers-hero">
+        <div class="hero-copy hero-center">
+          <p class="eyebrow">Live configuration</p>
+          <h1>Tiers and quotas.</h1>
+          <p class="lede">
+            Hosted Kelyra uses explicit daily quotas, route safety limits, and
+            authenticated workspaces. The CLI remains open and local-first.
+          </p>
+          <div class="hero-actions">
+            <a class="button secondary" href="./console.html">Open Console</a>
+            <a class="button secondary" href="#tier-table">View Table</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="tier-table" class="band tiers-band">
+        <div class="section-copy narrow">
+          <p class="eyebrow">Access model</p>
+          <h2>Public preview, beta seats, then workspaces.</h2>
+          <p>
+            Public routes are intentionally small. Hosted proof work requires
+            authenticated access because it queues jobs, stores receipts, and
+            consumes shared backend resources.
+          </p>
+        </div>
+        <div class="tier-grid" data-tier-grid>
+          <article class="tier-card placeholder">
+            <span>Loading</span>
+            <h3>Reading server tiers</h3>
+            <p>The table is generated from the backend tier configuration.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band quota-band">
+        <div class="quota-layout">
+          <div>
+            <p class="eyebrow">Safety limits</p>
+            <h2>Daily caps are not the only guard.</h2>
+          </div>
+          <div class="safety-table" data-safety-table></div>
+        </div>
+      </section>
+
+      <section class="band quota-types-band">
+        <div class="section-copy narrow">
+          <p class="eyebrow">Quota types</p>
+          <h2>What counts against quota.</h2>
+        </div>
+        <div class="quota-type-grid" data-quota-types></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>Kelyra</span>
+      <span>Hosted tiers are enforced by the API. Local CLI runs stay user-controlled.</span>
+    </footer>
+
+    <script src="./tiers.js"></script>
+  </body>
+</html>

@@ -13,9 +13,10 @@ const DEFAULT_DEV_ORIGINS = ['http://127.0.0.1:4340', 'http://localhost:4340'];
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 12;
 const DEXSCREENER_BASE = 'https://api.dexscreener.com';
 const DEX_CACHE_TTL_MS = 120_000;
-const KELYRA_BASE_TOKEN_ADDRESS = '0xb942B75A602fA318ac091370D93d9143Ba345Ba3';
+const KELYRA_REFERENCE_TOKEN_ADDRESS = '0x4200000000000000000000000000000000000006';
 const BASE_CHAIN_ID = 8453;
 const dexCache = new Map();
+const QUOTA_KEYS = ['oracleMessages', 'dataCalls', 'buildActions', 'proofJobs'];
 
 const mimeTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -54,6 +55,136 @@ function boolEnv(value, fallback = false) {
   return /^(1|true|yes|on)$/i.test(String(value));
 }
 
+function numericEnv(env, key, fallback) {
+  const value = Number(env[key]);
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
+}
+
+function buildTierConfig(env, rateLimitPerMinute) {
+  const publicOracle = numericEnv(env, 'KELYRA_PUBLIC_ORACLE_DAILY', 12);
+  const publicData = numericEnv(env, 'KELYRA_PUBLIC_DATA_DAILY', 40);
+  const launchOracle = numericEnv(env, 'KELYRA_LAUNCH_ORACLE_DAILY', 60);
+  const launchData = numericEnv(env, 'KELYRA_LAUNCH_DATA_DAILY', 300);
+  const launchBuild = numericEnv(env, 'KELYRA_LAUNCH_BUILD_DAILY', 6);
+  const launchProof = numericEnv(env, 'KELYRA_LAUNCH_PROOF_DAILY', 12);
+
+  const config = {
+    schema: 'kelyra.tiers.v1',
+    quotaWindow: 'UTC day',
+    defaultTierId: env.KELYRA_DEFAULT_TIER_ID || 'launch',
+    accessCodeTierId: env.KELYRA_ACCESS_CODE_TIER_ID || 'launch',
+    walletTierId: env.KELYRA_WALLET_TIER_ID || 'builder',
+    anonymousTierId: 'public',
+    quotaTypes: [
+      {
+        id: 'oracleMessages',
+        label: 'Oracle messages',
+        description: 'Chat, token analysis, market questions, and source-backed follow-up prompts.',
+      },
+      {
+        id: 'dataCalls',
+        label: 'Data calls',
+        description: 'Live source requests used by Pulse, Oracle, sandboxed Forge apps, and bridge tools.',
+      },
+      {
+        id: 'buildActions',
+        label: 'Build actions',
+        description: 'Hosted Forge builds and app repair actions that create or update project drafts.',
+      },
+      {
+        id: 'proofJobs',
+        label: 'Proof jobs',
+        description: 'Hosted proof jobs processed by an isolated worker and recorded as receipts.',
+      },
+    ],
+    safetyLimits: [
+      { label: 'Route burst safety', value: `${rateLimitPerMinute} requests per minute per IP/path` },
+      { label: 'Pulse cache', value: `${Math.floor(DEX_CACHE_TTL_MS / 1000)} seconds` },
+      { label: 'Request body cap', value: `${Math.floor(MAX_BODY_BYTES / 1024)} KB` },
+      { label: 'Hosted prompt cap', value: '4,000 characters for Forge build prompts' },
+      { label: 'Proof execution boundary', value: 'Hosted worker only, no browser-side filesystem execution' },
+    ],
+    tiers: [
+      {
+        id: 'public',
+        name: 'Public Preview',
+        access: 'No account required for read-only demo routes',
+        minimum: 'No wallet or asset required',
+        dailyQuota: {
+          oracleMessages: publicOracle,
+          dataCalls: publicData,
+          buildActions: 0,
+          proofJobs: 0,
+        },
+      },
+      {
+        id: 'launch',
+        name: 'Launch',
+        access: 'Beta access code or approved wallet',
+        minimum: 'Controlled beta access, no asset minimum',
+        dailyQuota: {
+          oracleMessages: launchOracle,
+          dataCalls: launchData,
+          buildActions: launchBuild,
+          proofJobs: launchProof,
+        },
+      },
+      {
+        id: 'builder',
+        name: 'Builder',
+        access: 'Verified wallet or promoted beta seat',
+        minimum: 'Configured by the operator when token gating is enabled',
+        dailyQuota: {
+          oracleMessages: numericEnv(env, 'KELYRA_BUILDER_ORACLE_DAILY', 200),
+          dataCalls: numericEnv(env, 'KELYRA_BUILDER_DATA_DAILY', 1200),
+          buildActions: numericEnv(env, 'KELYRA_BUILDER_BUILD_DAILY', 30),
+          proofJobs: numericEnv(env, 'KELYRA_BUILDER_PROOF_DAILY', 80),
+        },
+      },
+      {
+        id: 'team',
+        name: 'Team',
+        access: 'Team workspace with shared policies and proof history',
+        minimum: 'Configured by contract, allowlist, or billing seat',
+        dailyQuota: {
+          oracleMessages: numericEnv(env, 'KELYRA_TEAM_ORACLE_DAILY', 600),
+          dataCalls: numericEnv(env, 'KELYRA_TEAM_DATA_DAILY', 4000),
+          buildActions: numericEnv(env, 'KELYRA_TEAM_BUILD_DAILY', 120),
+          proofJobs: numericEnv(env, 'KELYRA_TEAM_PROOF_DAILY', 300),
+        },
+      },
+      {
+        id: 'scale',
+        name: 'Scale',
+        access: 'Dedicated deployment or contracted workspace',
+        minimum: 'Custom',
+        dailyQuota: {
+          oracleMessages: numericEnv(env, 'KELYRA_SCALE_ORACLE_DAILY', 2000),
+          dataCalls: numericEnv(env, 'KELYRA_SCALE_DATA_DAILY', 15000),
+          buildActions: numericEnv(env, 'KELYRA_SCALE_BUILD_DAILY', 500),
+          proofJobs: numericEnv(env, 'KELYRA_SCALE_PROOF_DAILY', 1200),
+        },
+      },
+    ],
+  };
+
+  if (!env.KELYRA_TIER_CONFIG_JSON) return config;
+
+  try {
+    const parsed = JSON.parse(env.KELYRA_TIER_CONFIG_JSON);
+    if (!Array.isArray(parsed?.tiers) || parsed.tiers.length === 0) throw new Error('tiers missing');
+    return {
+      ...config,
+      ...parsed,
+      safetyLimits: Array.isArray(parsed.safetyLimits) ? parsed.safetyLimits : config.safetyLimits,
+      quotaTypes: Array.isArray(parsed.quotaTypes) ? parsed.quotaTypes : config.quotaTypes,
+      tiers: parsed.tiers,
+    };
+  } catch (err) {
+    throw new Error(`KELYRA_TIER_CONFIG_JSON is invalid: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 export function loadConfig(env = process.env) {
   const environment = env.NODE_ENV || 'development';
   const production = environment === 'production';
@@ -64,7 +195,8 @@ export function loadConfig(env = process.env) {
   const storeDir = storeDirValue ? resolve(storeDirValue) : '';
   const allowedOrigins = parseList(env.KELYRA_ALLOWED_ORIGINS || DEFAULT_DEV_ORIGINS.join(','));
   const staticDir = resolve(env.KELYRA_STATIC_DIR || join(packageRoot, 'site'));
-  const tokenAddress = env.KELYRA_TOKEN_ADDRESS || KELYRA_BASE_TOKEN_ADDRESS;
+  const tokenAddress = env.KELYRA_TOKEN_ADDRESS || '';
+  const rateLimitPerMinute = Number(env.KELYRA_RATE_LIMIT_PER_MINUTE || 80);
 
   if (apiSecret.length < 32) {
     throw new Error('KELYRA_API_SECRET must be at least 32 characters.');
@@ -93,12 +225,13 @@ export function loadConfig(env = process.env) {
     environment,
     port: Number(env.PORT || 8080),
     publicBaseUrl: env.KELYRA_PUBLIC_BASE_URL || '',
-    rateLimitPerMinute: Number(env.KELYRA_RATE_LIMIT_PER_MINUTE || 80),
+    rateLimitPerMinute,
     requireTokenHolder: boolEnv(env.KELYRA_REQUIRE_TOKEN_HOLDER, false),
     runnerMode: env.KELYRA_RUNNER_MODE || 'queue-only',
     sessionTtlSeconds: Number(env.KELYRA_SESSION_TTL_SECONDS || DEFAULT_SESSION_TTL_SECONDS),
     staticDir,
     storeDir,
+    tierConfig: buildTierConfig(env, rateLimitPerMinute),
     tokenAddress,
     tokenMinBalance: env.KELYRA_TOKEN_MIN_BALANCE || '1',
     walletAuthDomain: env.KELYRA_WALLET_AUTH_DOMAIN || 'Kelyra Console',
@@ -239,7 +372,7 @@ function hostedForgeHtml(app) {
         document.getElementById('run-query')?.addEventListener('click', async () => {
           output.textContent = 'Loading source-backed data...';
           try {
-            const result = await window.kelyraQuery(${JSON.stringify(defaultCall)}, ${JSON.stringify(KELYRA_BASE_TOKEN_ADDRESS)}, { limit: 6 });
+            const result = await window.kelyraQuery(${JSON.stringify(defaultCall)}, ${JSON.stringify(KELYRA_REFERENCE_TOKEN_ADDRESS)}, { limit: 6 });
             output.textContent = JSON.stringify({ summary: result.summary, payload: result.payload }, null, 2);
           } catch (err) {
             output.textContent = err instanceof Error ? err.message : String(err);
@@ -464,6 +597,7 @@ class FileStore {
     this.receiptsPath = join(storeDir, 'receipts.json');
     this.appsPath = join(storeDir, 'forge-apps.json');
     this.noncesPath = join(storeDir, 'auth-nonces.json');
+    this.usagePath = join(storeDir, 'usage-counters.json');
   }
 
   async readJson(path, fallback) {
@@ -583,6 +717,27 @@ class FileStore {
     await this.writeJson(this.noncesPath, records);
     return record;
   }
+
+  async consumeUsage(ownerSub, quotaKey, limit, windowId, resetAt) {
+    if (!Number.isFinite(limit)) {
+      return { ok: true, ownerSub, quotaKey, limit: null, used: 0, remaining: null, resetAt };
+    }
+
+    const counters = await this.readJson(this.usagePath, []);
+    const active = counters.filter((item) => item.windowId === windowId);
+    const index = active.findIndex((item) => item.ownerSub === ownerSub && item.quotaKey === quotaKey);
+    const current = index >= 0 ? active[index] : { ownerSub, quotaKey, windowId, count: 0, resetAt };
+    if (current.count >= limit) {
+      await this.writeJson(this.usagePath, active);
+      return { ok: false, ownerSub, quotaKey, limit, used: current.count, remaining: 0, resetAt };
+    }
+
+    const next = { ...current, count: current.count + 1, resetAt, updatedAt: new Date().toISOString() };
+    if (index >= 0) active[index] = next;
+    else active.push(next);
+    await this.writeJson(this.usagePath, active);
+    return { ok: true, ownerSub, quotaKey, limit, used: next.count, remaining: Math.max(0, limit - next.count), resetAt };
+  }
 }
 
 class PostgresStore {
@@ -639,6 +794,16 @@ class PostgresStore {
           data jsonb NOT NULL
         );
         CREATE INDEX IF NOT EXISTS auth_nonces_address_idx ON auth_nonces (address, expires_at DESC);
+
+        CREATE TABLE IF NOT EXISTS usage_counters (
+          owner_sub text NOT NULL,
+          quota_key text NOT NULL,
+          window_id text NOT NULL,
+          count integer NOT NULL DEFAULT 0,
+          reset_at timestamptz NOT NULL,
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (owner_sub, quota_key, window_id)
+        );
       `));
     }
     await this.ready;
@@ -812,6 +977,41 @@ class PostgresStore {
     return result.rows[0]?.data || null;
   }
 
+  async consumeUsage(ownerSub, quotaKey, limit, windowId, resetAt) {
+    if (!Number.isFinite(limit)) {
+      return { ok: true, ownerSub, quotaKey, limit: null, used: 0, remaining: null, resetAt };
+    }
+
+    await this.ensureSchema();
+    const pool = await this.pool();
+    const result = await pool.query(
+      `INSERT INTO usage_counters (owner_sub, quota_key, window_id, count, reset_at, updated_at)
+       VALUES ($1, $2, $3, 1, $5, now())
+       ON CONFLICT (owner_sub, quota_key, window_id) DO UPDATE SET
+         count = usage_counters.count + 1,
+         reset_at = excluded.reset_at,
+         updated_at = now()
+       WHERE usage_counters.count < $4
+       RETURNING count`,
+      [ownerSub, quotaKey, windowId, limit, resetAt],
+    );
+
+    const count = result.rows[0]?.count;
+    if (count !== undefined) {
+      const used = Number(count);
+      return { ok: true, ownerSub, quotaKey, limit, used, remaining: Math.max(0, limit - used), resetAt };
+    }
+
+    const current = await pool.query(
+      `SELECT count FROM usage_counters
+       WHERE owner_sub = $1 AND quota_key = $2 AND window_id = $3
+       LIMIT 1`,
+      [ownerSub, quotaKey, windowId],
+    );
+    const used = Number(current.rows[0]?.count || limit);
+    return { ok: false, ownerSub, quotaKey, limit, used, remaining: 0, resetAt };
+  }
+
   async close() {
     const pool = await this.pool();
     await pool.end();
@@ -874,6 +1074,114 @@ function createRateLimiter(config) {
       retryAfter: Math.max(1, Math.ceil((current.resetAt - now) / 1000)),
     };
   };
+}
+
+function publicTierConfig(config) {
+  const gate = {
+    walletAuth: true,
+    accessCodeBeta: true,
+    tokenGate: config.requireTokenHolder
+      ? {
+          required: true,
+          chainId: BASE_CHAIN_ID,
+          tokenAddress: config.tokenAddress,
+          minimum: config.tokenMinBalance,
+        }
+      : { required: false },
+  };
+
+  return {
+    ...config.tierConfig,
+    gate,
+    enforced: true,
+  };
+}
+
+function tierById(config, tierId) {
+  const tiers = config.tierConfig.tiers || [];
+  return tiers.find((tier) => tier.id === tierId) ||
+    tiers.find((tier) => tier.id === config.tierConfig.defaultTierId) ||
+    tiers[0] ||
+    null;
+}
+
+function tierForSession(config, session) {
+  if (!session) return tierById(config, config.tierConfig.anonymousTierId || 'public');
+  if (session.tierId) return tierById(config, session.tierId);
+  if (session.authMode === 'wallet') return tierById(config, config.tierConfig.walletTierId);
+  if (session.authMode === 'access-code') return tierById(config, config.tierConfig.accessCodeTierId);
+  return tierById(config, config.tierConfig.defaultTierId);
+}
+
+function quotaLimitFor(tier, quotaKey) {
+  const value = tier?.dailyQuota?.[quotaKey];
+  if (value === null || value === 'unlimited') return Number.POSITIVE_INFINITY;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
+}
+
+function quotaWindow(now = new Date()) {
+  const windowId = now.toISOString().slice(0, 10);
+  const resetAt = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + 1,
+    0,
+    0,
+    0,
+    0,
+  )).toISOString();
+  return { windowId, resetAt };
+}
+
+function anonymousSubject(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const ip = forwarded || req.socket.remoteAddress || 'unknown';
+  return `public:${sha256(ip).slice(0, 18)}`;
+}
+
+function quotaHeaders(quota) {
+  if (!quota) return {};
+  return {
+    'x-kelyra-quota-tier': quota.tierId,
+    'x-kelyra-quota-key': quota.quotaKey,
+    'x-kelyra-quota-limit': quota.limit === null ? 'unlimited' : String(quota.limit),
+    'x-kelyra-quota-used': String(quota.used),
+    'x-kelyra-quota-remaining': quota.remaining === null ? 'unlimited' : String(quota.remaining),
+    'x-kelyra-quota-reset': quota.resetAt,
+  };
+}
+
+async function requireQuota(config, store, req, res, session, quotaKey) {
+  if (!QUOTA_KEYS.includes(quotaKey)) {
+    throw Object.assign(new Error('QUOTA_KEY_INVALID'), { status: 500 });
+  }
+
+  const tier = tierForSession(config, session);
+  const limit = quotaLimitFor(tier, quotaKey);
+  const { windowId, resetAt } = quotaWindow();
+  const ownerSub = session?.sub || anonymousSubject(req);
+  const result = await store.consumeUsage(ownerSub, quotaKey, limit, windowId, resetAt);
+  const quota = {
+    ...result,
+    tierId: tier?.id || 'unknown',
+    tierName: tier?.name || 'Unknown',
+    windowId,
+  };
+
+  if (!quota.ok) {
+    json(config, req, res, 429, {
+      ok: false,
+      error: 'QUOTA_EXCEEDED',
+      quota,
+    }, {
+      ...quotaHeaders(quota),
+      'retry-after': String(Math.max(1, Math.ceil((Date.parse(resetAt) - Date.now()) / 1000))),
+    });
+    return null;
+  }
+
+  return quota;
 }
 
 function responseHeaders(config, req, extra = {}) {
@@ -1331,9 +1639,9 @@ async function hostedDataQuery(input, context) {
   if (type === 'pulse.lanes' || type === 'pulse.risk' || type === 'market.discovery') {
     payload = await pulsePayload();
   } else if (type === 'oracle.token') {
-    payload = await oraclePayload(isBaseAddress(target) ? target : KELYRA_BASE_TOKEN_ADDRESS);
+    payload = await oraclePayload(isBaseAddress(target) ? target : KELYRA_REFERENCE_TOKEN_ADDRESS);
   } else if (type === 'market.search') {
-    payload = await oraclePayload(target || params.query || KELYRA_BASE_TOKEN_ADDRESS);
+    payload = await oraclePayload(target || params.query || KELYRA_REFERENCE_TOKEN_ADDRESS);
   } else if (type === 'oracle.search') {
     payload = target ? await oraclePayload(target) : await pulsePayload();
   } else if (type === 'receipts.list') {
@@ -1484,20 +1792,36 @@ export function createKelyraApiServer(options = {}) {
           runnerMode: config.runnerMode,
           store: config.databaseUrl ? 'postgres' : 'file',
           static: true,
-          features: {
-            auth: 'access-code-beta+wallet',
-            tokenGate: config.requireTokenHolder,
-            pulse: true,
-            oracle: true,
+	          features: {
+	            auth: 'access-code-beta+wallet',
+	            tokenGate: config.requireTokenHolder,
+	            tiers: true,
+	            pulse: true,
+	            oracle: true,
             proofJobs: true,
             forgeApps: true,
             hostedWorker: config.runnerMode === 'hosted-worker',
           },
         });
-        return;
-      }
+	        return;
+	      }
 
-      if (req.method === 'GET' && url.pathname === '/api/auth/session') {
+	      if (req.method === 'GET' && url.pathname === '/api/tiers') {
+	        const session = getSession(config, req);
+	        const currentTier = tierForSession(config, session);
+	        json(config, req, res, 200, {
+	          ok: true,
+	          ...publicTierConfig(config),
+	          currentTier: currentTier ? {
+	            id: currentTier.id,
+	            name: currentTier.name,
+	            authenticated: Boolean(session),
+	          } : null,
+	        });
+	        return;
+	      }
+
+	      if (req.method === 'GET' && url.pathname === '/api/auth/session') {
         const session = getSession(config, req);
         json(config, req, res, 200, {
           ok: true,
@@ -1622,24 +1946,30 @@ export function createKelyraApiServer(options = {}) {
         return;
       }
 
-      if (req.method === 'GET' && url.pathname === '/api/pulse') {
-        json(config, req, res, 200, await pulsePayload());
-        return;
-      }
+	      if (req.method === 'GET' && url.pathname === '/api/pulse') {
+	        const quota = await requireQuota(config, store, req, res, getSession(config, req), 'dataCalls');
+	        if (!quota) return;
+	        json(config, req, res, 200, { ...(await pulsePayload()), quota }, quotaHeaders(quota));
+	        return;
+	      }
 
-      if (req.method === 'POST' && url.pathname === '/api/oracle/analyze') {
-        const body = await readJsonBody(req);
-        json(config, req, res, 200, await oraclePayload(body.target || body.prompt));
-        return;
-      }
+	      if (req.method === 'POST' && url.pathname === '/api/oracle/analyze') {
+	        const body = await readJsonBody(req);
+	        const quota = await requireQuota(config, store, req, res, getSession(config, req), 'oracleMessages');
+	        if (!quota) return;
+	        json(config, req, res, 200, { ...(await oraclePayload(body.target || body.prompt)), quota }, quotaHeaders(quota));
+	        return;
+	      }
 
-      if (req.method === 'POST' && url.pathname === '/api/data') {
-        const session = requireSession(config, req, res);
-        if (!session) return;
-        const body = await readJsonBody(req);
-        json(config, req, res, 200, await hostedDataQuery(body, { config, store, session }));
-        return;
-      }
+	      if (req.method === 'POST' && url.pathname === '/api/data') {
+	        const session = requireSession(config, req, res);
+	        if (!session) return;
+	        const quota = await requireQuota(config, store, req, res, session, 'dataCalls');
+	        if (!quota) return;
+	        const body = await readJsonBody(req);
+	        json(config, req, res, 200, { ...(await hostedDataQuery(body, { config, store, session })), quota }, quotaHeaders(quota));
+	        return;
+	      }
 
       if (req.method === 'GET' && url.pathname === '/api/receipts') {
         const session = requireSession(config, req, res);
@@ -1661,24 +1991,26 @@ export function createKelyraApiServer(options = {}) {
         return;
       }
 
-      if (req.method === 'POST' && url.pathname === '/api/proof/jobs') {
-        const session = requireSession(config, req, res);
-        if (!session) return;
-        const body = await readJsonBody(req);
-        const prompt = String(body.prompt || '').trim();
-        if (!prompt) {
-          json(config, req, res, 400, { ok: false, error: 'PROMPT_REQUIRED' });
-          return;
-        }
-        const job = await store.createProofJob({
+	      if (req.method === 'POST' && url.pathname === '/api/proof/jobs') {
+	        const session = requireSession(config, req, res);
+	        if (!session) return;
+	        const body = await readJsonBody(req);
+	        const prompt = String(body.prompt || '').trim();
+	        if (!prompt) {
+	          json(config, req, res, 400, { ok: false, error: 'PROMPT_REQUIRED' });
+	          return;
+	        }
+	        const quota = await requireQuota(config, store, req, res, session, 'proofJobs');
+	        if (!quota) return;
+	        const job = await store.createProofJob({
           prompt,
           ownerSub: session.sub,
           workspaceRef: typeof body.workspaceRef === 'string' ? body.workspaceRef.slice(0, 200) : '',
           runnerMode: config.runnerMode,
         });
-        json(config, req, res, 202, { ok: true, job });
-        return;
-      }
+	        json(config, req, res, 202, { ok: true, job, quota }, quotaHeaders(quota));
+	        return;
+	      }
 
       const jobMatch = url.pathname.match(/^\/api\/proof\/jobs\/([^/]+)$/);
       if (req.method === 'GET' && jobMatch) {
@@ -1701,20 +2033,22 @@ export function createKelyraApiServer(options = {}) {
         return;
       }
 
-      if (req.method === 'POST' && url.pathname === '/api/apps/build') {
-        const session = requireSession(config, req, res);
-        if (!session) return;
-        const body = await readJsonBody(req);
-        const prompt = String(body.prompt || '').trim();
-        if (!prompt) {
+	      if (req.method === 'POST' && url.pathname === '/api/apps/build') {
+	        const session = requireSession(config, req, res);
+	        if (!session) return;
+	        const body = await readJsonBody(req);
+	        const prompt = String(body.prompt || '').trim();
+	        if (!prompt) {
           json(config, req, res, 400, { ok: false, error: 'PROMPT_REQUIRED' });
           return;
         }
         if (prompt.length > 4000) {
-          json(config, req, res, 400, { ok: false, error: 'PROMPT_TOO_LONG' });
-          return;
-        }
-        const job = await store.createProofJob({
+	          json(config, req, res, 400, { ok: false, error: 'PROMPT_TOO_LONG' });
+	          return;
+	        }
+	        const quota = await requireQuota(config, store, req, res, session, 'buildActions');
+	        if (!quota) return;
+	        const job = await store.createProofJob({
           prompt: `Hosted Forge draft: ${prompt}`,
           ownerSub: session.sub,
           workspaceRef: 'hosted-forge',
@@ -1725,9 +2059,9 @@ export function createKelyraApiServer(options = {}) {
           ownerSub: session.sub,
           proofJobId: job.id,
         });
-        json(config, req, res, 201, { ok: true, app: publicForgeApp(app), job });
-        return;
-      }
+	        json(config, req, res, 201, { ok: true, app: publicForgeApp(app), job, quota }, quotaHeaders(quota));
+	        return;
+	      }
 
       const appMatch = url.pathname.match(/^\/api\/apps\/([^/]+)$/);
       if (req.method === 'GET' && appMatch) {

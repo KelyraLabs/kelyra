@@ -22,7 +22,7 @@ const host = process.env.HOST || '127.0.0.1';
 const MAX_BODY_BYTES = 64 * 1024;
 const DEXSCREENER_BASE = 'https://api.dexscreener.com';
 const DEX_CACHE_TTL_MS = 120_000;
-const KELYRA_REFERENCE_TOKEN_ADDRESS = '0xb942B75A602fA318ac091370D93d9143Ba345Ba3';
+const KELYRA_REFERENCE_TOKEN_ADDRESS = '0x4200000000000000000000000000000000000006';
 const dexCache = new Map();
 
 process.chdir(workspaceRoot);
