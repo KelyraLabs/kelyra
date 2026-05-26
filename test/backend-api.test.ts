@@ -10,7 +10,7 @@ function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-async function startApi(options: { runnerMode?: string } = {}) {
+async function startApi(options: { runnerMode?: string; env?: Record<string, string> } = {}) {
   const tempDir = mkdtempSync(join(tmpdir(), 'kelyra-api-'));
   const { createKelyraApiServer } = await import('../backend/server.mjs');
   const { server, store } = createKelyraApiServer({
@@ -19,10 +19,11 @@ async function startApi(options: { runnerMode?: string } = {}) {
       KELYRA_API_SECRET: 'test-kelyra-api-secret-with-enough-length',
       KELYRA_ACCESS_CODE_SHA256: hash('test-access'),
       KELYRA_ALLOWED_ORIGINS: 'http://127.0.0.1:4340',
-      KELYRA_STORE_DIR: tempDir,
-      KELYRA_RUNNER_MODE: options.runnerMode || 'queue-only',
-    },
-  });
+	      KELYRA_STORE_DIR: tempDir,
+	      KELYRA_RUNNER_MODE: options.runnerMode || 'queue-only',
+	      ...(options.env || {}),
+	    },
+	  });
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
@@ -65,6 +66,22 @@ describe('Kelyra hosted API', () => {
       assert.equal(body.ok, true);
       assert.equal(body.service, 'kelyra-api');
       assert.equal(body.runnerMode, 'queue-only');
+    } finally {
+      await api.close();
+    }
+  });
+
+  it('exposes public tier configuration from the backend', async () => {
+    const api = await startApi();
+    try {
+      const response = await fetch(`${api.baseUrl}/api/tiers`);
+      const body = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(body.ok, true);
+      assert.equal(body.schema, 'kelyra.tiers.v1');
+      assert.equal(body.enforced, true);
+      assert.ok(body.tiers.some((tier: any) => tier.id === 'launch'));
+      assert.ok(body.quotaTypes.some((type: any) => type.id === 'buildActions'));
     } finally {
       await api.close();
     }
@@ -255,6 +272,40 @@ describe('Kelyra hosted API', () => {
       assert.equal(preview.status, 200);
       assert.match(previewBody, /window\.kelyraQuery/);
       assert.match(previewBody, /Run bridge query/);
+    } finally {
+      await api.close();
+    }
+  });
+
+  it('enforces the daily Forge build quota for authenticated sessions', async () => {
+    const api = await startApi({ env: { KELYRA_LAUNCH_BUILD_DAILY: '1' } });
+    try {
+      const cookie = await login(api.baseUrl);
+      const headers = {
+        'content-type': 'application/json',
+        cookie,
+        origin: 'http://127.0.0.1:4340',
+      };
+
+      const first = await fetch(`${api.baseUrl}/api/apps/build`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ prompt: 'Build one small proof dashboard' }),
+      });
+      assert.equal(first.status, 201);
+      assert.equal(first.headers.get('x-kelyra-quota-key'), 'buildActions');
+      assert.equal(first.headers.get('x-kelyra-quota-remaining'), '0');
+
+      const second = await fetch(`${api.baseUrl}/api/apps/build`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ prompt: 'Build another proof dashboard' }),
+      });
+      const secondBody = await second.json();
+      assert.equal(second.status, 429);
+      assert.equal(secondBody.error, 'QUOTA_EXCEEDED');
+      assert.equal(secondBody.quota.tierId, 'launch');
+      assert.equal(secondBody.quota.quotaKey, 'buildActions');
     } finally {
       await api.close();
     }
