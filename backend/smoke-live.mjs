@@ -30,7 +30,19 @@ async function main() {
   console.log(`Smoke target: ${baseUrl}`);
 
   const health = await request('/api/health');
-  console.log(`Health: ${health.body.service} ${health.body.environment} runner=${health.body.runnerMode}`);
+  console.log(`Health: ${health.body.service} ${health.body.environment} mode=${health.body.consoleMode || 'active'} runner=${health.body.runnerMode}`);
+
+  if (health.body.consoleMode === 'watch-only') {
+    await request('/api/tiers');
+    await request('/api/quota/profile');
+    const pulse = await fetch(`${baseUrl}/api/pulse`);
+    const pulseBody = await pulse.json().catch(() => ({}));
+    if (pulse.status !== 403 || pulseBody.error !== 'CONSOLE_WATCH_ONLY') {
+      throw new Error(`Expected watch-only pulse rejection, got ${pulse.status} ${JSON.stringify(pulseBody)}`);
+    }
+    console.log('Watch-only smoke passed: public config available, hosted actions blocked.');
+    return;
+  }
 
   const login = await request('/api/auth/login', {
     method: 'POST',

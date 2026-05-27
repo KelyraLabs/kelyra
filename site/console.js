@@ -1,6 +1,7 @@
 const navButtons = document.querySelectorAll('[data-section]');
 const surfaces = document.querySelectorAll('[data-surface]');
 const title = document.querySelector('[data-title]');
+const workspaceStatus = document.querySelector('[data-workspace-status] span');
 const promptInput = document.querySelector('[data-composer] input');
 const composer = document.querySelector('[data-composer]');
 const transcript = document.querySelector('[data-transcript]');
@@ -49,6 +50,12 @@ const quotaOracle = document.querySelector('[data-quota-oracle]');
 const quotaData = document.querySelector('[data-quota-data]');
 const quotaReset = document.querySelector('[data-quota-reset]');
 const runtimeGrid = document.querySelector('[data-runtime-grid]');
+const betaStripText = document.querySelector('.beta-strip span');
+const newChatButton = document.querySelector('[data-new-chat]');
+const runProofButton = document.querySelector('[data-run-proof]');
+const loadPulseButton = document.querySelector('[data-load-pulse]');
+const forgeBuildButton = document.querySelector('[data-forge-build]');
+const forgeLoadButton = document.querySelector('[data-forge-load]');
 
 const titles = {
   chat: 'Oracle',
@@ -74,7 +81,17 @@ const state = {
   tokenGateRequired: false,
   tokenMinimumLabel: '',
   quotaProfile: null,
+  consoleMode: 'active',
+  watchOnly: false,
 };
+
+function isWatchOnly() {
+  return state.watchOnly && state.hostedOnline && !state.bridgeOnline;
+}
+
+function watchOnlyMessage() {
+  return 'Kelyra Console is watch-only for launch. Token-holder access opens after the KELYRA token gate is enabled.';
+}
 
 function showToast(message) {
   if (!toast) return;
@@ -84,6 +101,56 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => {
     toast.classList.remove('is-visible');
   }, 2200);
+}
+
+function blockWatchOnly() {
+  if (!isWatchOnly()) return false;
+  showToast(watchOnlyMessage());
+  return true;
+}
+
+function applyConsoleModeUi() {
+  const watchOnly = isWatchOnly();
+  document.body.classList.toggle('is-watch-only', watchOnly);
+  if (betaStripText) {
+    betaStripText.textContent = watchOnly
+      ? 'Kelyra Console · watch-only launch preview'
+      : 'Kelyra Console · source-backed runtime';
+  }
+  if (workspaceStatus) {
+    workspaceStatus.textContent = watchOnly ? 'Launch preview locked' : 'SWD boundary ready';
+  }
+  if (promptInput) {
+    promptInput.disabled = watchOnly;
+    promptInput.placeholder = watchOnly
+      ? 'Watch-only launch preview. Holder console opens later.'
+      : 'Analyze a token, scan Base Pulse, or create proof...';
+  }
+  for (const control of [
+    newChatButton,
+    runProofButton,
+    loadPulseButton,
+    forgeBuildButton,
+    forgeLoadButton,
+    forgeReviseButton,
+    forgePublishButton,
+    forgeDeleteButton,
+    forgePrompt,
+    authInput,
+    walletAuthButton,
+  ]) {
+    if (control) control.disabled = watchOnly;
+  }
+  for (const control of composer?.querySelectorAll('button') || []) control.disabled = watchOnly;
+  for (const control of document.querySelectorAll('[data-fill]')) control.disabled = watchOnly;
+  composer?.setAttribute('aria-disabled', watchOnly ? 'true' : 'false');
+  forgeForm?.setAttribute('aria-disabled', watchOnly ? 'true' : 'false');
+  if (connectButton) connectButton.disabled = watchOnly;
+  if (watchOnly) {
+    if (authPanel) authPanel.hidden = true;
+    if (accessCodeSection) accessCodeSection.hidden = true;
+    if (logoutButton) logoutButton.hidden = true;
+  }
 }
 
 function quotaValueLabel(item) {
@@ -104,8 +171,12 @@ function renderQuotaProfile(profile) {
   const usage = profile?.quotas?.usage || {};
   if (quotaTier) quotaTier.textContent = profile?.tier?.name || 'Public';
   if (quotaMode) {
-    const mode = profile?.quotaMode === 'fresh' ? 'Fresh quota' : 'Full quota';
-    quotaMode.textContent = profile?.authenticated ? `${mode} · signed in` : `${mode} · public`;
+    if (isWatchOnly()) {
+      quotaMode.textContent = 'Watch-only launch preview';
+    } else {
+      const mode = profile?.quotaMode === 'fresh' ? 'Fresh quota' : 'Full quota';
+      quotaMode.textContent = profile?.authenticated ? `${mode} · signed in` : `${mode} · public`;
+    }
   }
   if (quotaBuild) quotaBuild.textContent = quotaValueLabel(usage.buildActions);
   if (quotaProof) quotaProof.textContent = quotaValueLabel(usage.proofJobs);
@@ -135,9 +206,11 @@ function renderQuotaOffline(message = 'Quota unavailable') {
 }
 
 function updateAuthPanelUi() {
-  if (accessCodeSection) accessCodeSection.hidden = !state.accessCodeEnabled;
+  if (accessCodeSection) accessCodeSection.hidden = isWatchOnly() || !state.accessCodeEnabled;
   if (authCopy) {
-    if (state.tokenGateRequired) {
+    if (isWatchOnly()) {
+      authCopy.textContent = 'The public console is currently watch-only. Wallet unlock will open after token-holder access is enabled.';
+    } else if (state.tokenGateRequired) {
       authCopy.textContent = state.tokenMinimumLabel
         ? `Connect a wallet holding at least ${state.tokenMinimumLabel}.`
         : 'Connect a wallet that meets the current token tier.';
@@ -147,11 +220,21 @@ function updateAuthPanelUi() {
       authCopy.textContent = 'Connect a wallet to open the hosted workspace.';
     }
   }
+  applyConsoleModeUi();
   renderRuntimeGrid();
 }
 
 function updateAuthUi() {
   if (!connectButton) return;
+  if (isWatchOnly()) {
+    connectButton.textContent = 'Holder access soon';
+    connectButton.classList.remove('is-authenticated');
+    connectButton.disabled = true;
+    if (logoutButton) logoutButton.hidden = true;
+    applyConsoleModeUi();
+    return;
+  }
+  connectButton.disabled = false;
   if (state.hostedOnline) {
     const wallet = state.session?.wallet?.address;
     connectButton.textContent = state.authenticated
@@ -161,11 +244,13 @@ function updateAuthUi() {
       : 'Connect Wallet';
     connectButton.classList.toggle('is-authenticated', state.authenticated);
     if (logoutButton) logoutButton.hidden = !state.authenticated;
+    applyConsoleModeUi();
     return;
   }
   connectButton.textContent = 'Connect Wallet';
   connectButton.classList.remove('is-authenticated');
   if (logoutButton) logoutButton.hidden = true;
+  applyConsoleModeUi();
 }
 
 function renderRuntimeGrid() {
@@ -187,9 +272,10 @@ function renderRuntimeGrid() {
       ? 'Resolving'
       : 'No hosted quota';
   const cards = [
+    ['Mode', isWatchOnly() ? 'Watch-only launch' : 'Active', isWatchOnly() ? 'Hosted actions are locked until holder access opens' : 'Interactive routes are enabled'],
     ['Runtime', runtime, state.health?.runnerMode || state.health?.runtime || 'No runner detected'],
     ['Auth', auth, state.accessCodeEnabled ? 'Access code fallback enabled' : 'Wallet flow only'],
-    ['Gate', gate, state.tokenGateRequired ? 'Wallet balance is enforced' : 'Token gate will be enabled last'],
+    ['Gate', gate, isWatchOnly() ? 'Token-holder console activates after launch' : state.tokenGateRequired ? 'Wallet balance is enforced' : 'Token gate will be enabled last'],
     ['Quota', quota, state.quotaProfile?.window?.resetAt ? resetLabel(state.quotaProfile.window.resetAt) : 'UTC daily window'],
     ['Store', state.health?.store || (state.bridgeOnline ? 'local files' : 'unknown'), state.health?.environment || state.health?.workspace || 'No environment report'],
     ['Worker', state.health?.features?.hostedWorker ? 'Hosted worker' : state.health?.runnerMode || 'Not connected', state.health?.features?.proofJobs ? 'Proof jobs available' : 'Proof jobs unavailable'],
@@ -207,6 +293,7 @@ function renderRuntimeGrid() {
 }
 
 function openAuthPanel() {
+  if (blockWatchOnly()) return;
   if (!authPanel) return;
   updateAuthPanelUi();
   authPanel.hidden = false;
@@ -276,6 +363,10 @@ async function refreshPublicGate() {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP_${response.status}`);
+    if (payload.consoleMode) {
+      state.consoleMode = payload.consoleMode;
+      state.watchOnly = payload.consoleMode === 'watch-only';
+    }
     state.accessCodeEnabled = Boolean(payload.gate?.accessCodeBeta);
     state.tokenGateRequired = Boolean(payload.gate?.tokenGate?.required);
     state.tokenMinimumLabel = payload.gate?.tokenGate?.minimumLabel || '';
@@ -311,6 +402,7 @@ async function refreshQuotaProfile(silent = true) {
 }
 
 async function connectWalletAuth() {
+  if (blockWatchOnly()) return;
   const provider = window.ethereum;
   if (!provider?.request) {
     openAuthPanel();
@@ -386,12 +478,16 @@ async function connectWalletAuth() {
 
 function requireHostedAuth(action) {
   if (!state.hostedOnline || state.authenticated) return true;
+  if (blockWatchOnly()) return false;
   showToast(action || 'Sign in to use the hosted workspace.');
   openAuthPanel();
   return false;
 }
 
 async function fetchModeJson({ localPath, hostedPath, options = {}, authRequired = false }) {
+  if (hostedPath && !state.bridgeOnline && state.hostedOnline && blockWatchOnly()) {
+    throw new Error('CONSOLE_WATCH_ONLY');
+  }
   const attempts = state.bridgeOnline
     ? [localPath]
     : state.hostedOnline
@@ -603,7 +699,9 @@ function renderHostedHistory(receipts = [], jobs = [], message) {
 async function refreshHostedHistory(silent = true) {
   if (!state.hostedOnline) return null;
   if (!state.authenticated) {
-    renderHostedHistory([], [], 'Sign in to read hosted receipts and proof jobs.');
+    renderHostedHistory([], [], isWatchOnly()
+      ? 'Hosted receipt history opens with token-holder access. CLI receipts can still be shared separately.'
+      : 'Sign in to read hosted receipts and proof jobs.');
     return null;
   }
 
@@ -700,7 +798,7 @@ function currentForgeApp() {
 }
 
 function updateForgeActionUi(app = currentForgeApp()) {
-  const lifecycleReady = Boolean(state.hostedOnline && !state.bridgeOnline && state.authenticated && app?.slug);
+  const lifecycleReady = Boolean(state.hostedOnline && !state.bridgeOnline && state.authenticated && app?.slug && !isWatchOnly());
   if (forgeReviseButton) forgeReviseButton.disabled = !lifecycleReady;
   if (forgePublishButton) {
     forgePublishButton.disabled = !lifecycleReady || app?.status === 'published';
@@ -777,7 +875,9 @@ function renderForgeApps(apps) {
   if (!apps?.length) {
     const empty = document.createElement('p');
     empty.className = 'empty-state';
-    empty.textContent = state.hostedOnline && !state.bridgeOnline
+    empty.textContent = isWatchOnly()
+      ? 'Forge is visible as a product preview. Building and hosted draft libraries open with token-holder access.'
+      : state.hostedOnline && !state.bridgeOnline
       ? 'No hosted Forge drafts yet. Sign in and build one above to start a preview workspace.'
       : 'No local Forge drafts yet. Build one above to start a preview workspace.';
     forgeAppList.append(empty);
@@ -814,6 +914,13 @@ function selectForgeApp(app) {
 }
 
 async function loadForgeApps(silent = false) {
+  if (blockWatchOnly()) {
+    state.forgeLoaded = true;
+    state.forgeApps = [];
+    resetForgePreview();
+    renderForgeApps([]);
+    return;
+  }
   if (state.hostedOnline && !state.bridgeOnline && !state.authenticated) {
     state.forgeLoaded = true;
     state.forgeApps = [];
@@ -924,6 +1031,8 @@ function setBridgeOffline(message = 'Run kelyra console') {
   state.authenticated = false;
   state.session = null;
   state.agentAvailable = false;
+  state.consoleMode = 'active';
+  state.watchOnly = false;
   state.accessCodeEnabled = true;
   state.tokenGateRequired = false;
   updateAuthUi();
@@ -939,6 +1048,7 @@ function setBridgeOffline(message = 'Run kelyra console') {
   if (latestReceipt) latestReceipt.textContent = 'none';
   if (historyEmpty) historyEmpty.textContent = 'Run kelyra console from a project to read receipts here.';
   renderReceipts([], 'Run kelyra console from a project to read receipts here.');
+  applyConsoleModeUi();
   renderRuntimeGrid();
 }
 
@@ -947,17 +1057,27 @@ function setHostedOnline(health) {
   state.hostedOnline = true;
   state.agentAvailable = false;
   state.health = health;
+  state.consoleMode = health.consoleMode || health.features?.consoleMode || 'active';
+  state.watchOnly = state.consoleMode === 'watch-only' || Boolean(health.features?.watchOnly);
   updateAuthUi();
   if (bridgeStatus) bridgeStatus.textContent = 'Hosted API';
-  if (bridgeDetail) bridgeDetail.textContent = health.environment === 'production' ? 'Production backend' : 'Hosted backend online';
-  if (proofState) proofState.textContent = 'Auth required';
-  if (proofDetail) proofDetail.textContent = 'Hosted proof jobs require a signed-in session and an isolated runner.';
-  setModelUnavailable('Hosted model access requires sign-in.');
+  if (bridgeDetail) bridgeDetail.textContent = isWatchOnly()
+    ? 'Watch-only launch preview'
+    : health.environment === 'production' ? 'Production backend' : 'Hosted backend online';
+  if (proofState) proofState.textContent = isWatchOnly() ? 'Preview only' : 'Auth required';
+  if (proofDetail) proofDetail.textContent = isWatchOnly()
+    ? 'Public hosted actions are locked until token-holder access opens.'
+    : 'Hosted proof jobs require a signed-in session and an isolated runner.';
+  setModelUnavailable(isWatchOnly() ? 'Hosted model actions are locked during launch preview.' : 'Hosted model access requires sign-in.');
   if (historyBridge) historyBridge.textContent = 'hosted';
   if (receiptCount) receiptCount.textContent = '0';
-  if (latestReceipt) latestReceipt.textContent = 'auth required';
-  if (historyEmpty) historyEmpty.textContent = 'Sign in to read hosted receipts and proof jobs.';
-  renderReceipts([], 'Sign in to read hosted receipts and proof jobs.');
+  if (latestReceipt) latestReceipt.textContent = isWatchOnly() ? 'preview' : 'auth required';
+  const hostedMessage = isWatchOnly()
+    ? 'Hosted receipt history opens with token-holder access. CLI receipts can still be shared separately.'
+    : 'Sign in to read hosted receipts and proof jobs.';
+  if (historyEmpty) historyEmpty.textContent = hostedMessage;
+  renderReceipts([], hostedMessage);
+  applyConsoleModeUi();
   renderRuntimeGrid();
 }
 
@@ -967,6 +1087,8 @@ function setBridgeOnline(health) {
   state.authenticated = false;
   state.session = null;
   state.health = health;
+  state.consoleMode = 'active';
+  state.watchOnly = false;
   updateAuthUi();
   updateAuthPanelUi();
   renderQuotaOffline('Local runtime active');
@@ -992,6 +1114,7 @@ function setBridgeOnline(health) {
       : 'Runtime online. Run a proof to create the first local receipt.';
   }
   renderReceipts(receipts);
+  applyConsoleModeUi();
   renderRuntimeGrid();
 }
 
@@ -1132,6 +1255,10 @@ async function runAgentPreview(prompt) {
 }
 
 async function loadPulse(silent = false) {
+  if (blockWatchOnly()) {
+    if (pulseSummary) pulseSummary.textContent = 'Pulse is paused for the public watch-only launch preview.';
+    return null;
+  }
   if (pulseSummary) pulseSummary.textContent = 'Loading Base signal lanes from source data...';
   try {
     const payload = await fetchModeJson({
@@ -1151,6 +1278,10 @@ async function loadPulse(silent = false) {
 }
 
 async function runPulseChat() {
+  if (blockWatchOnly()) {
+    addMessage('agent', 'Kelyra', 'Pulse is paused in the public watch-only preview. Token-holder access opens later.');
+    return;
+  }
   const pending = addMessage('agent', 'Kelyra', 'Loading Pulse lanes from source-backed Base DEX data...');
   try {
     const payload = await loadPulse(true);
@@ -1185,6 +1316,10 @@ function oracleSummary(payload) {
 }
 
 async function runOracle(prompt) {
+  if (blockWatchOnly()) {
+    addMessage('agent', 'Kelyra', 'Oracle actions are paused in the public watch-only preview. Token-holder access opens later.');
+    return;
+  }
   const pending = addMessage('agent', 'Kelyra', 'Resolving Base token data from public sources...');
   try {
     const payload = await fetchModeJson({
@@ -1210,6 +1345,12 @@ async function runOracle(prompt) {
 }
 
 async function runForgeBuild(prompt) {
+  if (blockWatchOnly()) {
+    if (forgeOutput) {
+      forgeOutput.innerHTML = '<span>Forge result</span><strong>Watch-only preview</strong><p>Hosted app builds open after token-holder access is enabled.</p>';
+    }
+    return;
+  }
   if (!state.bridgeOnline && !state.hostedOnline) {
     if (forgeOutput) {
       forgeOutput.innerHTML = '<span>Forge result</span><strong>Runtime required</strong><p>Start kelyra console or open the hosted backend before building app drafts.</p>';
@@ -1257,6 +1398,7 @@ async function runForgeBuild(prompt) {
 }
 
 async function hostedForgeLifecycleRequest(app, action, options = {}) {
+  if (blockWatchOnly()) throw new Error('CONSOLE_WATCH_ONLY');
   if (!app?.slug) throw new Error('Select a Forge draft first.');
   if (state.bridgeOnline || !state.hostedOnline) {
     throw new Error('Forge lifecycle actions are available on the hosted API.');
@@ -1369,6 +1511,10 @@ async function deleteSelectedForgeApp() {
 
 async function runLocalProof(prompt) {
   if (!state.bridgeOnline) {
+    if (blockWatchOnly()) {
+      addMessage('agent', 'Kelyra', 'Proof jobs are paused in the public watch-only preview. The CLI can still create local receipts.');
+      return;
+    }
     if (state.hostedOnline) {
       if (!requireHostedAuth('Sign in to queue hosted proof jobs.')) return;
       if (proofState) proofState.textContent = 'Queueing';
@@ -1442,10 +1588,10 @@ for (const button of navButtons) {
       surface.classList.toggle('active', surface.getAttribute('data-surface') === section);
     }
     if (title && section) title.textContent = titles[section] || 'Kelyra Console';
-    if (section === 'radar' && !state.pulseLoaded) {
+    if (section === 'radar' && !state.pulseLoaded && !isWatchOnly()) {
       loadPulse(true).catch(() => {});
     }
-    if (section === 'studio' && !state.forgeLoaded) {
+    if (section === 'studio' && !state.forgeLoaded && !isWatchOnly()) {
       loadForgeApps(true).catch(() => {});
     }
   });
@@ -1453,6 +1599,7 @@ for (const button of navButtons) {
 
 for (const example of document.querySelectorAll('[data-fill]')) {
   example.addEventListener('click', () => {
+    if (blockWatchOnly()) return;
     if (!promptInput) return;
     promptInput.value = example.getAttribute('data-fill') || '';
     promptInput.focus();
@@ -1461,6 +1608,7 @@ for (const example of document.querySelectorAll('[data-fill]')) {
 
 composer?.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (blockWatchOnly()) return;
   const prompt = promptInput?.value.trim();
   if (!prompt) {
     showToast('Write a task first.');
@@ -1480,14 +1628,16 @@ composer?.addEventListener('submit', async (event) => {
   }
 });
 
-document.querySelector('[data-run-proof]')?.addEventListener('click', async () => {
+runProofButton?.addEventListener('click', async () => {
+  if (blockWatchOnly()) return;
   const prompt = promptInput?.value.trim() || 'Create a local proof note for this console smoke test.';
   addMessage('user', 'You', prompt);
   if (promptInput) promptInput.value = '';
   await runLocalProof(prompt);
 });
 
-document.querySelector('[data-load-pulse]')?.addEventListener('click', () => {
+loadPulseButton?.addEventListener('click', () => {
+  if (blockWatchOnly()) return;
   loadPulse(false).catch(() => {});
 });
 
@@ -1499,7 +1649,8 @@ document.querySelector('[data-history-refresh]')?.addEventListener('click', () =
   refreshBridge().then(() => showToast('History refreshed.')).catch(() => showToast('History unavailable.'));
 });
 
-document.querySelector('[data-forge-load]')?.addEventListener('click', () => {
+forgeLoadButton?.addEventListener('click', () => {
+  if (blockWatchOnly()) return;
   loadForgeApps(false).catch(() => {});
 });
 
@@ -1513,19 +1664,23 @@ document.querySelector('[data-forge-refresh]')?.addEventListener('click', () => 
 });
 
 forgeReviseButton?.addEventListener('click', () => {
+  if (blockWatchOnly()) return;
   reviseSelectedForgeApp().catch(() => {});
 });
 
 forgePublishButton?.addEventListener('click', () => {
+  if (blockWatchOnly()) return;
   publishSelectedForgeApp().catch(() => {});
 });
 
 forgeDeleteButton?.addEventListener('click', () => {
+  if (blockWatchOnly()) return;
   deleteSelectedForgeApp().catch(() => {});
 });
 
 forgeForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (blockWatchOnly()) return;
   const prompt = forgePrompt?.value.trim();
   if (!prompt) {
     showToast('Write an app brief first.');
@@ -1534,7 +1689,8 @@ forgeForm?.addEventListener('submit', async (event) => {
   await runForgeBuild(prompt);
 });
 
-document.querySelector('[data-new-chat]')?.addEventListener('click', () => {
+newChatButton?.addEventListener('click', () => {
+  if (blockWatchOnly()) return;
   if (!transcript) return;
   transcript.innerHTML = `
     <article class="message agent-message">
@@ -1546,6 +1702,7 @@ document.querySelector('[data-new-chat]')?.addEventListener('click', () => {
 });
 
 connectButton?.addEventListener('click', () => {
+  if (blockWatchOnly()) return;
   if (state.hostedOnline) {
     if (state.authenticated) {
       refreshQuotaProfile(false).catch(() => {});
@@ -1572,6 +1729,7 @@ authPanel?.addEventListener('click', (event) => {
 
 authForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (blockWatchOnly()) return;
   if (!state.accessCodeEnabled) {
     showToast('Access-code login is disabled.');
     return;

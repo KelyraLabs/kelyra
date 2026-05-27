@@ -8,6 +8,8 @@ separate from the local CLI bridge in `site/server.mjs`.
 - Public routes use `/api/*`.
 - Local CLI bridge routes use `/api/local/*`.
 - The hosted API never executes a user's local filesystem directly.
+- Production defaults to `KELYRA_CONSOLE_MODE=watch-only`; active hosted console
+  routes should open only after token-holder access is ready.
 - Proof execution must go through an authenticated job and an isolated runner.
 - Provider keys, runner secrets, and signing keys stay server-side only.
 
@@ -42,6 +44,7 @@ KELYRA_STORE_DIR=/var/lib/kelyra-api
 KELYRA_STATIC_DIR=/app/site
 KELYRA_PUBLIC_BASE_URL=https://kelyra.example
 KELYRA_DATABASE_SSL=false
+KELYRA_CONSOLE_MODE=watch-only
 KELYRA_RUNNER_MODE=hosted-worker
 KELYRA_BASE_RPC_URL=https://mainnet.base.org
 KELYRA_BASESCAN_API_KEY=<etherscan-v2-api-key>
@@ -72,6 +75,11 @@ disk for a public launch.
 `KELYRA_RUNNER_MODE=queue-only` accepts proof jobs but does not execute them.
 Use it only for a gated preflight. `KELYRA_RUNNER_MODE=hosted-worker` lets the
 worker service claim queued jobs and write hosted receipts.
+
+`KELYRA_CONSOLE_MODE=watch-only` exposes public config, tiers, quota profile,
+and static console pages while blocking hosted chat, Pulse refresh, auth login,
+proof jobs, Forge builds, and hosted data routes. Set `KELYRA_CONSOLE_MODE=active`
+only when holder access and quotas are ready.
 
 `KELYRA_REQUIRE_TOKEN_HOLDER=true` makes wallet login check the configured ERC-20
 balance on Base. The wallet tier is selected from the configured token thresholds:

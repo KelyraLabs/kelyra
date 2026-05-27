@@ -62,6 +62,21 @@ button {
   cursor: pointer;
 }
 
+button:disabled,
+input:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+input:disabled,
+textarea:disabled {
+  color: var(--muted);
+}
+
 .beta-strip {
   position: relative;
   z-index: 20;
@@ -461,6 +476,14 @@ button {
   color: #9df0ba;
 }
 
+body.is-watch-only .top-actions .connect,
+body.is-watch-only .dock-card button,
+body.is-watch-only .studio-prompt button {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--muted);
+}
+
 .top-actions .logout {
   border-color: rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.026);
@@ -652,6 +675,11 @@ button {
   border-radius: 8px;
   background: rgba(10, 11, 16, 0.94);
   box-shadow: 0 20px 64px rgba(0, 0, 0, 0.34);
+}
+
+body.is-watch-only .composer {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(10, 11, 16, 0.72);
 }
 
 .composer input {
