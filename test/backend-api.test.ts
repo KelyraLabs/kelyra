@@ -154,6 +154,53 @@ describe('Kelyra hosted API', () => {
     }
   });
 
+  it('enforces watch-only launch mode on hosted console actions', async () => {
+    const api = await startApi({ env: { KELYRA_CONSOLE_MODE: 'watch-only' } });
+    try {
+      const health = await fetch(`${api.baseUrl}/api/health`);
+      const healthBody = await health.json();
+      assert.equal(health.status, 200);
+      assert.equal(healthBody.consoleMode, 'watch-only');
+      assert.equal(healthBody.features.watchOnly, true);
+
+      const tiers = await fetch(`${api.baseUrl}/api/tiers`);
+      const tiersBody = await tiers.json();
+      assert.equal(tiers.status, 200);
+      assert.equal(tiersBody.consoleMode, 'watch-only');
+
+      const login = await fetch(`${api.baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://127.0.0.1:4340',
+        },
+        body: JSON.stringify({ accessCode: 'test-access' }),
+      });
+      const loginBody = await login.json();
+      assert.equal(login.status, 403);
+      assert.equal(loginBody.error, 'CONSOLE_WATCH_ONLY');
+
+      const pulse = await fetch(`${api.baseUrl}/api/pulse`);
+      const pulseBody = await pulse.json();
+      assert.equal(pulse.status, 403);
+      assert.equal(pulseBody.error, 'CONSOLE_WATCH_ONLY');
+
+      const oracle = await fetch(`${api.baseUrl}/api/oracle/analyze`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://127.0.0.1:4340',
+        },
+        body: JSON.stringify({ target: '0x4200000000000000000000000000000000000006' }),
+      });
+      const oracleBody = await oracle.json();
+      assert.equal(oracle.status, 403);
+      assert.equal(oracleBody.error, 'CONSOLE_WATCH_ONLY');
+    } finally {
+      await api.close();
+    }
+  });
+
   it('can disable access-code beta without exposing the fallback in public config', async () => {
     const api = await startApi({ env: { KELYRA_ACCESS_CODE_ENABLED: 'false' } });
     try {

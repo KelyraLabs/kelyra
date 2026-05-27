@@ -19,6 +19,7 @@ const BASE_CHAIN_ID = 8453;
 const dexCache = new Map();
 const explorerCache = new Map();
 const QUOTA_KEYS = ['oracleMessages', 'dataCalls', 'buildActions', 'proofJobs'];
+const CONSOLE_MODES = new Set(['active', 'watch-only']);
 
 const mimeTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -55,6 +56,12 @@ function safeEqual(a, b) {
 function boolEnv(value, fallback = false) {
   if (value === undefined || value === '') return fallback;
   return /^(1|true|yes|on)$/i.test(String(value));
+}
+
+function consoleModeFromEnv(env, production) {
+  const value = String(env.KELYRA_CONSOLE_MODE || '').trim().toLowerCase();
+  if (CONSOLE_MODES.has(value)) return value;
+  return production ? 'watch-only' : 'active';
 }
 
 function numericEnv(env, key, fallback) {
@@ -285,6 +292,7 @@ export function loadConfig(env = process.env) {
     apiSecret,
     baseRpcUrl: env.KELYRA_BASE_RPC_URL || 'https://mainnet.base.org',
     cookieSecure: production,
+    consoleMode: consoleModeFromEnv(env, production),
     databaseSsl: boolEnv(env.KELYRA_DATABASE_SSL, false),
     databaseUrl,
     environment,
@@ -1520,6 +1528,7 @@ function publicTierConfig(config) {
 
   return {
     ...publicConfig,
+    consoleMode: config.consoleMode,
     gate,
     enforced: true,
   };
@@ -1754,6 +1763,17 @@ function requireSession(config, req, res) {
     return null;
   }
   return session;
+}
+
+function requireConsoleActive(config, req, res) {
+  if (config.consoleMode !== 'watch-only') return true;
+  json(config, req, res, 403, {
+    ok: false,
+    error: 'CONSOLE_WATCH_ONLY',
+    consoleMode: config.consoleMode,
+    message: 'Kelyra Console is watch-only during launch. Active hosted actions open after token-holder access is enabled.',
+  });
+  return false;
 }
 
 function requireMachineSession(config, req, res) {
@@ -2565,10 +2585,13 @@ export function createKelyraApiServer(options = {}) {
           ok: true,
           service: 'kelyra-api',
           environment: config.environment,
+          consoleMode: config.consoleMode,
           runnerMode: config.runnerMode,
           store: config.databaseUrl ? 'postgres' : 'file',
           static: true,
           features: {
+            consoleMode: config.consoleMode,
+            watchOnly: config.consoleMode === 'watch-only',
             auth: config.accessCodeEnabled ? 'access-code-beta+wallet' : 'wallet',
             accessCodeBeta: config.accessCodeEnabled,
             tokenGate: config.requireTokenHolder,
@@ -2630,6 +2653,7 @@ export function createKelyraApiServer(options = {}) {
       }
 
       if (req.method === 'POST' && url.pathname === '/api/auth/login') {
+        if (!requireConsoleActive(config, req, res)) return;
         if (!config.accessCodeEnabled) {
           json(config, req, res, 403, { ok: false, error: 'ACCESS_CODE_DISABLED' });
           return;
@@ -2656,6 +2680,7 @@ export function createKelyraApiServer(options = {}) {
       }
 
       if (req.method === 'POST' && url.pathname === '/api/auth/wallet/nonce') {
+        if (!requireConsoleActive(config, req, res)) return;
         const body = await readJsonBody(req);
         const address = normalizeAddress(body.address);
         if (!address) {
@@ -2682,6 +2707,7 @@ export function createKelyraApiServer(options = {}) {
       }
 
       if (req.method === 'POST' && url.pathname === '/api/auth/wallet/verify') {
+        if (!requireConsoleActive(config, req, res)) return;
         const body = await readJsonBody(req);
         const address = normalizeAddress(body.address);
         const message = String(body.message || '');
@@ -2749,6 +2775,7 @@ export function createKelyraApiServer(options = {}) {
       }
 
 	      if (req.method === 'GET' && url.pathname === '/api/pulse') {
+	        if (!requireConsoleActive(config, req, res)) return;
 	        const quota = await requireQuota(config, store, req, res, getSession(config, req), 'dataCalls');
 	        if (!quota) return;
 	        json(config, req, res, 200, { ...(await pulsePayload()), quota }, quotaHeaders(quota));
@@ -2756,6 +2783,7 @@ export function createKelyraApiServer(options = {}) {
 	      }
 
 	      if (req.method === 'POST' && url.pathname === '/api/oracle/analyze') {
+	        if (!requireConsoleActive(config, req, res)) return;
 	        const body = await readJsonBody(req);
 	        const quota = await requireQuota(config, store, req, res, getSession(config, req), 'oracleMessages');
 	        if (!quota) return;
@@ -2764,6 +2792,7 @@ export function createKelyraApiServer(options = {}) {
 	      }
 
 	      if (req.method === 'POST' && url.pathname === '/api/data') {
+	        if (!requireConsoleActive(config, req, res)) return;
 	        const session = requireSession(config, req, res);
 	        if (!session) return;
 	        const quota = await requireQuota(config, store, req, res, session, 'dataCalls');
@@ -2806,9 +2835,10 @@ export function createKelyraApiServer(options = {}) {
           jobs: await store.listProofJobs(session.sub, safeLimit(url.searchParams.get('limit'), 50, 100)),
         });
         return;
-      }
+	      }
 
 	      if (req.method === 'POST' && url.pathname === '/api/proof/jobs') {
+	        if (!requireConsoleActive(config, req, res)) return;
 	        const session = requireSession(config, req, res);
 	        if (!session) return;
 	        const body = await readJsonBody(req);
@@ -2848,9 +2878,10 @@ export function createKelyraApiServer(options = {}) {
         const apps = await store.listForgeApps(session.sub, safeLimit(url.searchParams.get('limit'), 50, 100));
         json(config, req, res, 200, { ok: true, apps: apps.map(publicForgeApp) });
         return;
-      }
+	      }
 
 	      if (req.method === 'POST' && url.pathname === '/api/apps/build') {
+	        if (!requireConsoleActive(config, req, res)) return;
 	        const session = requireSession(config, req, res);
 	        if (!session) return;
 	        const body = await readJsonBody(req);
@@ -2894,6 +2925,7 @@ export function createKelyraApiServer(options = {}) {
       }
 
       if (req.method === 'PATCH' && appMatch) {
+        if (!requireConsoleActive(config, req, res)) return;
         const session = requireSession(config, req, res);
         if (!session) return;
         const app = await getOwnedApp(store, session, appMatch[1]);
@@ -2932,6 +2964,7 @@ export function createKelyraApiServer(options = {}) {
       }
 
       if (req.method === 'DELETE' && appMatch) {
+        if (!requireConsoleActive(config, req, res)) return;
         const session = requireSession(config, req, res);
         if (!session) return;
         const deleted = await store.deleteForgeApp(appMatch[1], session.sub);
@@ -2945,6 +2978,7 @@ export function createKelyraApiServer(options = {}) {
 
       const publishMatch = url.pathname.match(/^\/api\/apps\/([^/]+)\/publish$/);
       if (req.method === 'POST' && publishMatch) {
+        if (!requireConsoleActive(config, req, res)) return;
         const session = requireSession(config, req, res);
         if (!session) return;
         const app = await getOwnedApp(store, session, publishMatch[1]);

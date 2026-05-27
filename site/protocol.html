@@ -17,7 +17,7 @@
         <a href="./protocol.html">Protocol</a>
         <a href="./tiers.html">Tiers</a>
         <a href="./index.html#start">Install</a>
-        <a class="nav-pill" href="./console.html">Console</a>
+        <a class="nav-pill" href="./console.html">Watch Console</a>
       </nav>
     </header>
 
@@ -35,7 +35,7 @@
               <span>$</span> kelyra console
               <small>⧉</small>
             </button>
-            <a class="button secondary" href="./console.html">Open Console</a>
+            <a class="button secondary" href="./console.html">Watch Console</a>
           </div>
         </div>
       </section>
@@ -63,7 +63,7 @@
           <article>
             <span>03</span>
             <h3>Hosted console path</h3>
-            <p>The public product should use backend API routes, auth, quotas, job isolation, and either cloud sandbox jobs or explicit local pairing.</p>
+            <p>The public launch runs the hosted console in watch-only mode. Token-holder auth, quotas, jobs, and isolated runners activate after the KELYRA gate is enabled.</p>
           </article>
         </div>
       </section>
@@ -90,11 +90,11 @@
           <p class="eyebrow">Public architecture</p>
           <h2>The web product should not execute the user's filesystem directly.</h2>
           <p>
-            A public Kelyra Console needs a real backend: authenticated sessions,
-            holder-gated quotas, provider routing, receipt storage, and isolated
-            job runners. The local bridge is useful for development and power
-            users, but it must stay bound to localhost and explicitly launched
-            from the project.
+            A public Kelyra Console needs a real backend: launch-safe watch-only
+            mode, authenticated sessions, holder-gated quotas, provider routing,
+            receipt storage, and isolated job runners. The local bridge is useful
+            for development and power users, but it must stay bound to localhost
+            and explicitly launched from the project.
           </p>
         </div>
         <div class="console-strip">
