@@ -13,9 +13,11 @@ const DEFAULT_DEV_ORIGINS = ['http://127.0.0.1:4340', 'http://localhost:4340'];
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 12;
 const DEXSCREENER_BASE = 'https://api.dexscreener.com';
 const DEX_CACHE_TTL_MS = 120_000;
+const EXPLORER_CACHE_TTL_MS = 180_000;
 const KELYRA_REFERENCE_TOKEN_ADDRESS = '0x4200000000000000000000000000000000000006';
 const BASE_CHAIN_ID = 8453;
 const dexCache = new Map();
+const explorerCache = new Map();
 const QUOTA_KEYS = ['oracleMessages', 'dataCalls', 'buildActions', 'proofJobs'];
 
 const mimeTypes = new Map([
@@ -286,6 +288,8 @@ export function loadConfig(env = process.env) {
     databaseSsl: boolEnv(env.KELYRA_DATABASE_SSL, false),
     databaseUrl,
     environment,
+    baseScanApiKey: env.KELYRA_BASESCAN_API_KEY || '',
+    baseScanApiUrl: env.KELYRA_BASESCAN_API_URL || 'https://api.etherscan.io/v2/api',
     port: Number(env.PORT || 8080),
     publicBaseUrl: env.KELYRA_PUBLIC_BASE_URL || '',
     rateLimitPerMinute,
@@ -573,7 +577,11 @@ function buildForgeApp(input) {
     ownerSub: input.ownerSub || 'access-code',
     status: input.status || previous?.status || 'draft',
     proofJobId: input.proofJobId || null,
-    receiptId: previous?.receiptId || null,
+    proofStatus: input.proofStatus || (input.proofJobId ? 'queued' : previous?.proofStatus || 'unverified'),
+    proofJobStatus: input.proofJobId ? 'queued' : previous?.proofJobStatus || null,
+    receiptId: input.receiptId || null,
+    proofCompletedAt: input.proofCompletedAt || null,
+    proofError: input.proofError || null,
     bridgeCalls,
     capabilities,
     previewUrl: `/api/apps/${slug}/preview`,
@@ -953,6 +961,14 @@ class FileStore {
     return apps.find((app) => app.slug === slug) || null;
   }
 
+  async findForgeAppByProofJobId(proofJobId, ownerSub = '') {
+    const apps = await this.readJson(this.appsPath, []);
+    return apps.find((app) => (
+      app.proofJobId === proofJobId &&
+      (!ownerSub || app.ownerSub === ownerSub)
+    )) || null;
+  }
+
   async updateForgeApp(app) {
     const apps = await this.readJson(this.appsPath, []);
     const next = apps.map((item) => item.slug === app.slug ? app : item);
@@ -1260,6 +1276,19 @@ class PostgresStore {
     await this.ensureSchema();
     const pool = await this.pool();
     const result = await pool.query('SELECT data FROM forge_apps WHERE slug = $1 LIMIT 1', [slug]);
+    return result.rows[0]?.data || null;
+  }
+
+  async findForgeAppByProofJobId(proofJobId, ownerSub = 'access-code') {
+    await this.ensureSchema();
+    const pool = await this.pool();
+    const result = await pool.query(
+      `SELECT data FROM forge_apps
+       WHERE data->>'proofJobId' = $1 AND owner_sub = $2
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [proofJobId, ownerSub],
+    );
     return result.rows[0]?.data || null;
   }
 
@@ -1872,6 +1901,38 @@ async function fetchDex(path, ttlMs = DEX_CACHE_TTL_MS) {
   }
 }
 
+async function fetchExplorer(config, params, ttlMs = EXPLORER_CACHE_TTL_MS) {
+  if (!config?.baseScanApiKey) {
+    throw Object.assign(new Error('EXPLORER_API_NOT_CONFIGURED'), { status: 424 });
+  }
+
+  const url = new URL(config.baseScanApiUrl || 'https://api.etherscan.io/v2/api');
+  url.searchParams.set('chainid', String(BASE_CHAIN_ID));
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
+  }
+  url.searchParams.set('apikey', config.baseScanApiKey);
+
+  const cacheKey = url.toString().replace(config.baseScanApiKey, '<redacted>');
+  const cached = explorerCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(url, {
+      headers: { accept: 'application/json' },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Explorer API ${response.status}`);
+    const value = await response.json();
+    explorerCache.set(cacheKey, { expiresAt: Date.now() + ttlMs, value });
+    return value;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function uniquePairs(pairs) {
   const byKey = new Map();
   for (const pair of pairs) {
@@ -1945,6 +2006,100 @@ async function baseContractSnapshot(config, address) {
         : null,
     },
     unknowns,
+  };
+}
+
+function explorerResultOk(payload) {
+  return payload?.status === '1' && payload.result !== undefined && payload.result !== null;
+}
+
+function firstExplorerRow(payload) {
+  return Array.isArray(payload?.result) ? payload.result[0] || null : null;
+}
+
+function parseHolderCount(payload) {
+  if (!explorerResultOk(payload)) return null;
+  const value = Array.isArray(payload.result) ? payload.result[0] : payload.result;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+export async function baseExplorerSnapshot(config, address) {
+  const normalized = normalizeAddress(address);
+  if (!normalized) {
+    return {
+      ok: false,
+      source: 'Etherscan API V2',
+      status: 'address_required',
+      unknowns: ['verified source code', 'deployer history', 'holder count'],
+    };
+  }
+
+  if (!config?.baseScanApiKey) {
+    return {
+      ok: false,
+      source: 'Etherscan API V2',
+      status: 'not_configured',
+      sourceUrl: `https://basescan.org/address/${normalized}`,
+      unknowns: ['verified source code', 'deployer history', 'holder count'],
+    };
+  }
+
+  const [sourceResult, creationResult, holderResult] = await Promise.allSettled([
+    fetchExplorer(config, {
+      module: 'contract',
+      action: 'getsourcecode',
+      address: normalized,
+    }),
+    fetchExplorer(config, {
+      module: 'contract',
+      action: 'getcontractcreation',
+      contractaddresses: normalized,
+    }),
+    fetchExplorer(config, {
+      module: 'token',
+      action: 'tokenholdercount',
+      contractaddress: normalized,
+    }),
+  ]);
+
+  const sourcePayload = fulfilledValue(sourceResult, null);
+  const creationPayload = fulfilledValue(creationResult, null);
+  const holderPayload = fulfilledValue(holderResult, null);
+  const source = firstExplorerRow(sourcePayload);
+  const creation = firstExplorerRow(creationPayload);
+  const holderCount = parseHolderCount(holderPayload);
+  const sourceCode = String(source?.SourceCode || '').trim();
+  const abi = String(source?.ABI || '').trim();
+  const verifiedSource = Boolean(sourceCode || (abi && !/not verified/i.test(abi)));
+  const deployer = normalizeAddress(creation?.contractCreator || creation?.creator || '');
+  const creationTxHash = creation?.txHash || creation?.transactionHash || null;
+  const errors = [sourceResult, creationResult, holderResult]
+    .filter((item) => item.status === 'rejected')
+    .map((item) => item.reason instanceof Error ? item.reason.message : String(item.reason));
+  const unknowns = [];
+  if (!explorerResultOk(sourcePayload)) unknowns.push('verified source code');
+  if (!explorerResultOk(creationPayload) || !deployer) unknowns.push('deployer history');
+  if (holderCount === null) unknowns.push('holder count');
+
+  return {
+    ok: errors.length < 3,
+    source: 'Etherscan API V2',
+    status: errors.length < 3 ? 'available' : 'unavailable',
+    sourceUrl: `https://basescan.org/address/${normalized}`,
+    fetchedAt: new Date().toISOString(),
+    address: normalized,
+    verifiedSource,
+    contractName: source?.ContractName || null,
+    compilerVersion: source?.CompilerVersion || null,
+    licenseType: source?.LicenseType || null,
+    proxy: source?.Proxy || null,
+    implementation: normalizeAddress(source?.Implementation || '') || null,
+    deployer,
+    creationTxHash,
+    holderCount,
+    unknowns,
+    errors,
   };
 }
 
@@ -2076,15 +2231,50 @@ async function oraclePayload(targetValue, config = null) {
 
   const primary = pairs[0];
   const address = target.match(/0x[a-fA-F0-9]{40}/)?.[0] || primary?.baseToken?.address || '';
-  const contract = config && address
-    ? await baseContractSnapshot(config, address).catch((err) => ({
-        ok: false,
-        source: 'Base RPC',
-        sourceUrl: `https://basescan.org/address/${normalizeAddress(address)}`,
-        error: err instanceof Error ? err.message : String(err),
-        unknowns: ['contract bytecode', 'ERC-20 metadata'],
-      }))
-    : null;
+  const [contractResult, explorerResult] = config && address
+    ? await Promise.allSettled([
+        baseContractSnapshot(config, address),
+        baseExplorerSnapshot(config, address),
+      ])
+    : [null, null];
+  const contract = contractResult?.status === 'fulfilled'
+    ? contractResult.value
+    : address
+      ? {
+          ok: false,
+          source: 'Base RPC',
+          sourceUrl: `https://basescan.org/address/${normalizeAddress(address)}`,
+          error: contractResult?.reason instanceof Error ? contractResult.reason.message : String(contractResult?.reason || 'unavailable'),
+          unknowns: ['contract bytecode', 'ERC-20 metadata'],
+        }
+      : null;
+  const explorer = explorerResult?.status === 'fulfilled'
+    ? explorerResult.value
+    : address
+      ? {
+          ok: false,
+          source: 'Etherscan API V2',
+          sourceUrl: `https://basescan.org/address/${normalizeAddress(address)}`,
+          status: 'unavailable',
+          error: explorerResult?.reason instanceof Error ? explorerResult.reason.message : String(explorerResult?.reason || 'unavailable'),
+          unknowns: ['verified source code', 'deployer history', 'holder count'],
+        }
+      : null;
+  const unknowns = [
+    'holder concentration',
+    'deployer history',
+    'honeypot simulation',
+    'LP lock state',
+    'verified source code',
+  ];
+  if (explorer?.deployer) {
+    const index = unknowns.indexOf('deployer history');
+    if (index !== -1) unknowns.splice(index, 1);
+  }
+  if (explorer?.verifiedSource) {
+    const index = unknowns.indexOf('verified source code');
+    if (index !== -1) unknowns.splice(index, 1);
+  }
   const normalized = pairs.slice(0, 8).map((pair, index) => normalizePair(pair, index === 0 ? 1 : 0, 'oracle'));
   return {
     ok: true,
@@ -2092,22 +2282,19 @@ async function oraclePayload(targetValue, config = null) {
     chainId: 'base',
     token: normalizePair(primary).token,
     contract,
+    explorer,
     primary: normalized[0],
     pairs: normalized,
-    unknowns: [
-      'holder concentration',
-      'deployer history',
-      'honeypot simulation',
-      'LP lock state',
-      'verified source code',
-    ],
+    unknowns,
     sources: [
       { label: 'DEX Screener public API', ok: true, url: primary?.url || null },
       { label: 'Base RPC contract metadata', ok: Boolean(contract?.ok), url: contract?.sourceUrl || null },
+      { label: 'Etherscan API V2 explorer metadata', ok: Boolean(explorer?.ok), url: explorer?.sourceUrl || null },
     ],
     notes: [
       'Market and pair data are source-backed by DEX Screener.',
       'Contract bytecode and ERC-20 metadata are source-backed by Base RPC when a token address resolves.',
+      'Explorer metadata is source-backed only when KELYRA_BASESCAN_API_KEY is configured.',
       'Unknown fields stay unknown until a wallet, explorer, or simulation source is connected.',
     ],
   };
@@ -2237,6 +2424,20 @@ async function getOwnedApp(store, session, slug) {
   return app;
 }
 
+async function updateForgeAppProofState(store, job, patch) {
+  if (!job?.id || typeof store.findForgeAppByProofJobId !== 'function') return null;
+  const app = await store.findForgeAppByProofJobId(job.id, job.ownerSub).catch(() => null);
+  if (!app) return null;
+  const updated = {
+    ...app,
+    ...patch,
+    proofJobStatus: patch.proofJobStatus || patch.proofStatus || app.proofJobStatus || null,
+    updatedAt: patch.updatedAt || new Date().toISOString(),
+  };
+  await store.updateForgeApp(updated);
+  return updated;
+}
+
 export async function runProofWorkerOnce(store, options = {}) {
   const workerId = options.workerId || `worker_${randomBytes(6).toString('hex')}`;
   const job = await store.claimNextProofJob(workerId);
@@ -2257,7 +2458,15 @@ export async function runProofWorkerOnce(store, options = {}) {
       },
     };
     await store.updateProofJob(completed);
-    return { ok: true, processed: true, job: completed, receipt };
+    const app = await updateForgeAppProofState(store, completed, {
+      proofStatus: 'verified',
+      proofJobStatus: 'completed',
+      receiptId: receipt.id,
+      proofCompletedAt: receipt.timestamp,
+      proofError: null,
+      updatedAt: receipt.timestamp,
+    });
+    return { ok: true, processed: true, job: completed, receipt, app: publicForgeApp(app) };
   } catch (err) {
     const now = new Date().toISOString();
     const failed = {
@@ -2268,7 +2477,13 @@ export async function runProofWorkerOnce(store, options = {}) {
       error: err instanceof Error ? err.message : String(err),
     };
     await store.updateProofJob(failed);
-    return { ok: false, processed: true, job: failed, error: failed.error };
+    const app = await updateForgeAppProofState(store, failed, {
+      proofStatus: 'failed',
+      proofJobStatus: 'failed',
+      proofError: failed.error,
+      updatedAt: now,
+    });
+    return { ok: false, processed: true, job: failed, app: publicForgeApp(app), error: failed.error };
   }
 }
 
@@ -2313,19 +2528,20 @@ export function createKelyraApiServer(options = {}) {
           runnerMode: config.runnerMode,
           store: config.databaseUrl ? 'postgres' : 'file',
           static: true,
-	          features: {
-	            auth: config.accessCodeEnabled ? 'access-code-beta+wallet' : 'wallet',
-	            accessCodeBeta: config.accessCodeEnabled,
-	            tokenGate: config.requireTokenHolder,
-	            tiers: true,
-	            pulse: true,
-	            oracle: true,
+          features: {
+            auth: config.accessCodeEnabled ? 'access-code-beta+wallet' : 'wallet',
+            accessCodeBeta: config.accessCodeEnabled,
+            tokenGate: config.requireTokenHolder,
+            tiers: true,
+            pulse: true,
+            oracle: true,
+            explorer: Boolean(config.baseScanApiKey),
             proofJobs: true,
             forgeApps: true,
             hostedWorker: config.runnerMode === 'hosted-worker',
           },
         });
-	        return;
+        return;
 	      }
 
 	      if (req.method === 'GET' && url.pathname === '/api/tiers') {

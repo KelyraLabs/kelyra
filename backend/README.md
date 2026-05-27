@@ -44,6 +44,8 @@ KELYRA_PUBLIC_BASE_URL=https://kelyra.example
 KELYRA_DATABASE_SSL=false
 KELYRA_RUNNER_MODE=hosted-worker
 KELYRA_BASE_RPC_URL=https://mainnet.base.org
+KELYRA_BASESCAN_API_KEY=<etherscan-v2-api-key>
+KELYRA_BASESCAN_API_URL=https://api.etherscan.io/v2/api
 KELYRA_REQUIRE_TOKEN_HOLDER=true
 KELYRA_TOKEN_ADDRESS=<base-erc20-contract-address>
 KELYRA_ACCESS_CODE_ENABLED=true
@@ -85,6 +87,11 @@ the same tier minimum; after that they receive full quota. The default tiers can
 be tuned with `KELYRA_*_ORACLE_DAILY`, `KELYRA_*_DATA_DAILY`,
 `KELYRA_*_BUILD_DAILY`, `KELYRA_*_PROOF_DAILY`, and matching
 `KELYRA_*_FRESH_*` variables, or replaced with `KELYRA_TIER_CONFIG_JSON`.
+
+`KELYRA_BASESCAN_API_KEY` is optional. When present, Oracle reports add
+source-code verification state, deployer/creation transaction, and holder count
+from the Etherscan API V2 Base chain (`chainid=8453`). Without it, those fields
+remain explicitly unknown.
 
 ## Railway MVP
 

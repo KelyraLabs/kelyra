@@ -709,6 +709,15 @@ function updateForgeActionUi(app = currentForgeApp()) {
   if (forgeDeleteButton) forgeDeleteButton.disabled = !lifecycleReady;
 }
 
+function forgeProofLabel(app) {
+  if (!app) return 'unverified';
+  if (app.proofStatus === 'verified' || app.receiptId) return 'verified';
+  if (app.proofStatus === 'failed') return 'proof failed';
+  if (app.proofJobStatus === 'processing') return 'processing';
+  if (app.proofStatus === 'queued' || app.proofJobId) return 'queued';
+  return app.proofStatus || 'unverified';
+}
+
 function resetForgePreview() {
   state.selectedForgeSlug = '';
   state.selectedForgeApp = null;
@@ -733,11 +742,12 @@ function renderForgeApp(app) {
   titleNode.textContent = app.title || app.slug || 'Kelyra app';
   titleNode.title = titleNode.textContent;
   const summary = document.createElement('p');
+  const proofLabel = forgeProofLabel(app);
   const proofRef = app.receiptId
     ? `receipt ${shortReceiptId(app.receiptId)}`
     : app.proofJobId
-      ? `queued proof job ${shortReceiptId(app.proofJobId)}`
-      : app.status || 'draft';
+      ? `${proofLabel} proof job ${shortReceiptId(app.proofJobId)}`
+      : proofLabel;
   const location = app.workspacePath ? `saved to ${app.workspacePath}` : 'created in hosted workspace';
   summary.textContent = `${app.kind || 'app'} ${location} with ${proofRef}.`;
 
@@ -779,7 +789,7 @@ function renderForgeApps(apps) {
     card.type = 'button';
     card.className = `forge-app-card${state.selectedForgeSlug === app.slug ? ' active' : ''}`;
     card.innerHTML = '<span></span><strong></strong><p></p>';
-    card.querySelector('span').textContent = `${app.status || 'draft'} · ${app.kind || 'forge app'} · v${app.version || 1}`;
+    card.querySelector('span').textContent = `${app.status || 'draft'} · ${forgeProofLabel(app)} · ${app.kind || 'forge app'} · v${app.version || 1}`;
     card.querySelector('strong').textContent = app.title || app.slug;
     card.querySelector('strong').title = app.title || app.slug;
     card.querySelector('p').textContent = `${(app.files || []).length} files · ${(app.bridgeCalls || []).join(', ') || 'no bridge calls'}`;
@@ -826,9 +836,9 @@ async function loadForgeApps(silent = false) {
     renderForgeApps(state.forgeApps);
     const selected = state.forgeApps.find((app) => app.slug === state.selectedForgeSlug);
     if (selected) {
-      selectForgeApp(selected);
+      renderForgeApp(selected);
     } else if (state.forgeApps[0]) {
-      selectForgeApp(state.forgeApps[0]);
+      renderForgeApp(state.forgeApps[0]);
     } else {
       resetForgePreview();
     }
@@ -1161,11 +1171,15 @@ function oracleSummary(payload) {
   const contract = payload.contract?.ok
     ? `Contract source: ${payload.contract.hasBytecode ? 'bytecode found' : 'bytecode unknown'}; ERC-20 ${payload.contract.erc20?.symbol || 'metadata unknown'}${payload.contract.erc20?.totalSupplyFormatted ? ` supply ${payload.contract.erc20.totalSupplyFormatted}` : ''}.`
     : 'Contract source: unavailable from Base RPC.';
+  const explorer = payload.explorer?.ok
+    ? `Explorer source: ${payload.explorer.verifiedSource ? 'verified source' : 'source not verified'}${payload.explorer.contractName ? ` (${payload.explorer.contractName})` : ''}; deployer ${payload.explorer.deployer || 'unknown'}; holders ${payload.explorer.holderCount ?? 'unknown'}.`
+    : 'Explorer source: optional BaseScan/Etherscan API not connected or unavailable.';
   return [
     `${token.symbol || token.name || 'Token'} on Base: ${formatCurrency(primary?.priceUsd, false)} price, ${formatCurrency(primary?.liquidityUsd)} liquidity, ${formatCurrency(primary?.volume24h)} 24h volume.`,
     `24h change: ${formatPercent(primary?.priceChange24h)}. Buy pressure: ${primary?.buyPressure === null || primary?.buyPressure === undefined ? 'unknown' : `${Math.round(primary.buyPressure * 100)}%`}. Age: ${formatAge(primary?.ageHours)}.`,
     `Risk shape: ${flags}.`,
     contract,
+    explorer,
     `Unknown until more sources are connected: ${unknowns}.`,
   ].join('\n');
 }
