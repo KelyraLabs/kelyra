@@ -28,7 +28,7 @@
           <h1>Local proof first. Hosted console second.</h1>
           <p class="lede">
             Kelyra Core is the open execution boundary: SWD, receipts, policies,
-            proof bundles, CI verification, MCP, and a local console bridge.
+            proof bundles, CI explanation, MCP, and a local console bridge.
           </p>
           <div class="hero-actions">
             <button class="command-pill" type="button" data-copy="kelyra console">
@@ -53,7 +53,7 @@
           <article>
             <span>01</span>
             <h3>CLI core</h3>
-            <p>Run chat, one-shot prompts, provider checks, SWD apply, receipts, proof export, policy, skills, MCP, and CI verification locally.</p>
+            <p>Run chat, one-shot prompts, doctor checks, SWD apply, receipts, proof sharing, policy, skills, MCP, and CI verification locally.</p>
           </article>
           <article>
             <span>02</span>
@@ -74,13 +74,13 @@
           <h2>The product must stay inspectable from terminal.</h2>
         </div>
         <div class="command-matrix">
-          <article><strong>kelyra init --check</strong><span>Read-only setup and provider readiness.</span></article>
+          <article><strong>kelyra doctor</strong><span>Readiness check for local setup, receipts, CI, providers, and hosted API.</span></article>
           <article><strong>kelyra providers check</strong><span>Shows which model-backed paths are available.</span></article>
           <article><strong>kelyra chat</strong><span>Interactive agent session with SWD verification.</span></article>
           <article><strong>kelyra run --file TASK.md</strong><span>One-shot prompt with bounded turns and receipts.</span></article>
           <article><strong>kelyra swd apply --stdin --json</strong><span>Model-free verified file actions from an external agent.</span></article>
-          <article><strong>kelyra proof export latest</strong><span>Portable proof bundle for the latest receipt.</span></article>
-          <article><strong>kelyra verify --ci</strong><span>Read-only CI verification for PR changes and receipts.</span></article>
+          <article><strong>kelyra proof share latest</strong><span>Portable proof bundle plus static HTML review page.</span></article>
+          <article><strong>kelyra ci explain</strong><span>Explains why the current diff passes or fails CI.</span></article>
           <article><strong>kelyra console</strong><span>Local browser console connected to the current workspace.</span></article>
         </div>
       </section>

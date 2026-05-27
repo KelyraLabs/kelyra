@@ -555,7 +555,7 @@ h3 {
 
 .entry-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   max-width: 1120px;
   margin: 38px auto 0;

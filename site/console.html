@@ -262,8 +262,8 @@
             </div>
             <div class="docs-list">
               <article><span>Start</span><strong>Local runtime</strong><p>Run <code>kelyra console</code> from the repository you want to inspect.</p><code>kelyra console --port 4340</code></article>
-              <article><span>Proof</span><strong>Receipts</strong><p>Inspect the latest local proof bundle or export it for review.</p><code>kelyra proof show latest</code></article>
-              <article><span>Policy</span><strong>CI gates</strong><p>Use policy templates and receipt checks before a PR reaches main.</p><code>kelyra setup-ci --strict</code></article>
+              <article><span>Proof</span><strong>Receipts</strong><p>Create a static proof page or publish the latest receipt to hosted history.</p><code>kelyra proof share latest</code></article>
+              <article><span>Policy</span><strong>CI gates</strong><p>Use policy templates and explain CI results before a PR reaches main.</p><code>kelyra ci explain</code></article>
               <article><span>Hosted</span><strong>API boundary</strong><p>Public console routes use backend auth and queued proof jobs, not local filesystem execution.</p><code>npm run backend:dev</code></article>
             </div>
             <div class="runtime-grid" data-runtime-grid aria-live="polite"></div>

@@ -1,4 +1,4 @@
-import { createProofBundle, exportProofBundle } from '../proof.js';
+import { createProofBundle, exportProofBundle, exportProofShare } from '../proof.js';
 import { error, heading, info, success, warn } from '../utils.js';
 
 interface ProofOptions {
@@ -44,6 +44,25 @@ export async function proofCommand(action = 'export', target = 'latest', options
       if (!result.ok) warn('Proof exported with verification issues.');
       return;
     }
+
+    if (normalizedAction === 'share') {
+      const result = exportProofShare(target, options.out);
+      if (options.json) {
+        console.log(JSON.stringify({
+          ok: result.ok,
+          path: result.path,
+          htmlPath: result.htmlPath,
+          receiptId: result.bundle.receipt.id,
+          verification: result.bundle.verification,
+        }, null, 2));
+        return;
+      }
+
+      success(`Created shareable proof: ${result.htmlPath}`);
+      info(`Raw proof JSON: ${result.path}`);
+      if (!result.ok) warn('Shareable proof contains verification issues.');
+      return;
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     error(message);
@@ -52,6 +71,6 @@ export async function proofCommand(action = 'export', target = 'latest', options
   }
 
   error(`Unknown proof action: ${normalizedAction}`);
-  info('Usage: kelyra proof export latest | kelyra proof show latest');
+  info('Usage: kelyra proof export latest | kelyra proof share latest | kelyra proof show latest');
   process.exitCode = 1;
 }

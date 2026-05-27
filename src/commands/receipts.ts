@@ -27,6 +27,9 @@ interface ReceiptsOptions {
   json?: boolean;
   key?: string;
   force?: boolean;
+  apiUrl?: string;
+  secret?: string;
+  dryRun?: boolean;
 }
 
 export async function receiptsCommand(
@@ -71,8 +74,13 @@ export async function receiptsCommand(
     return;
   }
 
+  if (normalizedAction === 'publish') {
+    await publishStoredReceipt(target ?? 'latest', options);
+    return;
+  }
+
   warn(`Unknown receipts action: ${normalizedAction}`);
-  info('Usage: kelyra receipts | kelyra receipts show latest | kelyra receipts verify latest | kelyra receipts chain | kelyra receipts keygen | kelyra receipts sign latest');
+  info('Usage: kelyra receipts | kelyra receipts show latest | kelyra receipts verify latest | kelyra receipts chain | kelyra receipts keygen | kelyra receipts sign latest | kelyra receipts publish latest');
 }
 
 function printReceiptList(limit: number, asJson?: boolean): void {
@@ -303,6 +311,89 @@ function signStoredReceipt(target: string, rawKeyPath: string | undefined, asJso
   success(`Signed receipt ${signed.id}.`);
   info(`Receipt: ${savedPath}`);
   info(`Signer: ${keyId}`);
+}
+
+async function publishStoredReceipt(target: string, options: ReceiptsOptions): Promise<void> {
+  const receipt = readReceipt(target);
+  if (!receipt) {
+    error(`Receipt not found: ${target}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const apiUrl = (options.apiUrl || process.env.KELYRA_API_URL || '').trim().replace(/\/+$/, '');
+  const secret = (options.secret || process.env.KELYRA_API_SECRET || '').trim();
+  const verification = verifyReceipt(receipt);
+  const integrityOk = verifyReceiptIntegrity(receipt);
+  const signatureOk = verifyReceiptSignature(receipt);
+
+  if (!apiUrl) {
+    error('Missing KELYRA_API_URL or --api-url.');
+    process.exitCode = 1;
+    return;
+  }
+  if (!secret) {
+    error('Missing KELYRA_API_SECRET or --secret.');
+    process.exitCode = 1;
+    return;
+  }
+
+  const payload = {
+    receipt,
+    verification: {
+      filesOk: verification.ok,
+      integrityOk,
+      signatureOk,
+    },
+    source: {
+      kind: 'kelyra-cli',
+      cwd: process.cwd(),
+      publishedAt: new Date().toISOString(),
+    },
+  };
+
+  if (options.dryRun) {
+    if (options.json) {
+      console.log(JSON.stringify({
+        ok: true,
+        dryRun: true,
+        endpoint: `${apiUrl}/api/receipts/import`,
+        receiptId: receipt.id,
+        verification: payload.verification,
+      }, null, 2));
+      return;
+    }
+    info(`Dry run: would publish ${receipt.id} to ${apiUrl}/api/receipts/import`);
+    return;
+  }
+
+  try {
+    const response = await fetch(`${apiUrl}/api/receipts/import`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${secret}`,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = typeof body?.error === 'string' ? body.error : `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify(body, null, 2));
+      return;
+    }
+
+    success(`Published receipt ${receipt.id}.`);
+    info(`Hosted owner: ${body.ownerSub || 'operator'}`);
+  } catch (err) {
+    error(`Receipt publish failed: ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+  }
 }
 
 function resolveKeyPath(rawPath: string | undefined): string {

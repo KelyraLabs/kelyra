@@ -96,6 +96,15 @@ Use JSON output for downstream tooling:
 npx kelyra verify --ci --json
 ```
 
+Explain the same result locally in reviewer-friendly language:
+
+```bash
+npx kelyra ci explain
+```
+
+`ci explain` uses the same verification engine and exit behavior, but focuses on
+why the diff passes or fails and which recommendation to handle first.
+
 Compare against a specific base ref:
 
 ```bash
