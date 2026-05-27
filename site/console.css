@@ -1339,6 +1339,12 @@ button {
   background: rgba(125, 233, 240, 0.055);
 }
 
+.forge-app-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .forge-app-card strong {
   overflow: hidden;
   font-family: var(--font-display);

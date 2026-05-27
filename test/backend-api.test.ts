@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { createServer } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,60 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
 function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+async function startExplorerStub() {
+  const requests: string[] = [];
+  const server = createServer((req, res) => {
+    const url = new URL(req.url || '/', 'http://explorer.test');
+    requests.push(url.search);
+    const action = url.searchParams.get('action');
+    let payload: any;
+    if (action === 'getsourcecode') {
+      payload = {
+        status: '1',
+        message: 'OK',
+        result: [{
+          SourceCode: 'contract Demo {}',
+          ABI: '[{\"type\":\"function\"}]',
+          ContractName: 'DemoToken',
+          CompilerVersion: 'v0.8.23+commit.f704f362',
+          LicenseType: 'MIT',
+          Proxy: '0',
+          Implementation: '',
+        }],
+      };
+    } else if (action === 'getcontractcreation') {
+      payload = {
+        status: '1',
+        message: 'OK',
+        result: [{
+          contractAddress: url.searchParams.get('contractaddresses'),
+          contractCreator: '0x1111111111111111111111111111111111111111',
+          txHash: '0xabc123',
+        }],
+      };
+    } else if (action === 'tokenholdercount') {
+      payload = { status: '1', message: 'OK', result: '1234' };
+    } else {
+      payload = { status: '0', message: 'NOTOK', result: 'unsupported action' };
+    }
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(`${JSON.stringify(payload)}\n`);
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  assert.equal(typeof address, 'object');
+  assert.ok(address);
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}/api`,
+    requests,
+    close: async () => {
+      await new Promise<void>((resolve, reject) => {
+        server.close((err) => err ? reject(err) : resolve());
+      });
+    },
+  };
 }
 
 async function startApi(options: {
@@ -134,6 +189,45 @@ describe('Kelyra hosted API', () => {
     });
     assert.equal(config.accessCodeEnabled, false);
     assert.equal(config.accessCodeHash, '');
+  });
+
+  it('uses optional explorer metadata without requiring it for Oracle', async () => {
+    const explorer = await startExplorerStub();
+    try {
+      const { baseExplorerSnapshot, loadConfig } = await import('../backend/server.mjs');
+      const address = '0x4200000000000000000000000000000000000006';
+
+      const disabled = await baseExplorerSnapshot(loadConfig({
+        NODE_ENV: 'test',
+        KELYRA_API_SECRET: 'test-kelyra-api-secret-with-enough-length',
+        KELYRA_ACCESS_CODE_SHA256: hash('test-access'),
+        KELYRA_ALLOWED_ORIGINS: 'http://127.0.0.1:4340',
+        KELYRA_STORE_DIR: mkdtempSync(join(tmpdir(), 'kelyra-api-config-')),
+      }), address);
+      assert.equal(disabled.ok, false);
+      assert.equal(disabled.status, 'not_configured');
+      assert.ok(disabled.unknowns.includes('verified source code'));
+
+      const enabled = await baseExplorerSnapshot(loadConfig({
+        NODE_ENV: 'test',
+        KELYRA_API_SECRET: 'test-kelyra-api-secret-with-enough-length',
+        KELYRA_ACCESS_CODE_SHA256: hash('test-access'),
+        KELYRA_ALLOWED_ORIGINS: 'http://127.0.0.1:4340',
+        KELYRA_STORE_DIR: mkdtempSync(join(tmpdir(), 'kelyra-api-config-')),
+        KELYRA_BASESCAN_API_KEY: 'test-explorer-key',
+        KELYRA_BASESCAN_API_URL: explorer.baseUrl,
+      }), address);
+
+      assert.equal(enabled.ok, true);
+      assert.equal(enabled.verifiedSource, true);
+      assert.equal(enabled.contractName, 'DemoToken');
+      assert.equal(enabled.deployer, '0x1111111111111111111111111111111111111111');
+      assert.equal(enabled.creationTxHash, '0xabc123');
+      assert.equal(enabled.holderCount, 1234);
+      assert.ok(explorer.requests.every((request) => request.includes('chainid=8453')));
+    } finally {
+      await explorer.close();
+    }
   });
 
   it('supports wallet nonce login without requiring token gate by default', async () => {
@@ -508,9 +602,10 @@ describe('Kelyra hosted API', () => {
     }
   });
 
-  it('builds hosted Forge drafts and exposes a sandbox preview', async () => {
-    const api = await startApi();
+  it('builds hosted Forge drafts, exposes preview, and links worker receipts back to the app', async () => {
+    const api = await startApi({ runnerMode: 'hosted-worker' });
     try {
+      const { runProofWorkerOnce } = await import('../backend/server.mjs');
       const cookie = await login(api.baseUrl);
 
       const denied = await fetch(`${api.baseUrl}/api/apps`);
@@ -531,6 +626,8 @@ describe('Kelyra hosted API', () => {
       assert.equal(createdBody.app.kind, 'market-dashboard');
       assert.equal(createdBody.app.assets, undefined);
       assert.equal(createdBody.app.version, 1);
+      assert.equal(createdBody.app.proofStatus, 'queued');
+      assert.equal(createdBody.app.receiptId, null);
       assert.ok(createdBody.app.files.some((file: any) => file.path === 'app.js'));
       assert.ok(createdBody.app.files.some((file: any) => file.path === 'styles.css'));
       assert.ok(createdBody.app.previewUrl.includes('/api/apps/'));
@@ -543,6 +640,19 @@ describe('Kelyra hosted API', () => {
       assert.equal(listed.status, 200);
       assert.equal(listedBody.apps.length, 1);
       assert.equal(listedBody.apps[0].slug, createdBody.app.slug);
+
+      const processedBuild = await runProofWorkerOnce(api.store, { workerId: 'forge-worker-build' });
+      assert.equal(processedBuild.ok, true);
+      assert.equal(processedBuild.app.slug, createdBody.app.slug);
+      assert.equal(processedBuild.app.proofStatus, 'verified');
+      assert.equal(processedBuild.app.receiptId, processedBuild.receipt.id);
+
+      const proofed = await fetch(`${api.baseUrl}/api/apps/${createdBody.app.slug}`, {
+        headers: { cookie },
+      });
+      const proofedBody = await proofed.json();
+      assert.equal(proofedBody.app.proofStatus, 'verified');
+      assert.equal(proofedBody.app.receiptId, processedBuild.receipt.id);
 
       const preview = await fetch(`${api.baseUrl}${createdBody.app.previewUrl}`, {
         headers: { cookie },
@@ -573,6 +683,14 @@ describe('Kelyra hosted API', () => {
       assert.equal(updatedBody.app.slug, createdBody.app.slug);
       assert.equal(updatedBody.app.version, 2);
       assert.equal(updatedBody.app.kind, 'proof-workspace');
+      assert.equal(updatedBody.app.proofStatus, 'queued');
+      assert.equal(updatedBody.app.receiptId, null);
+
+      const processedRevision = await runProofWorkerOnce(api.store, { workerId: 'forge-worker-revision' });
+      assert.equal(processedRevision.ok, true);
+      assert.equal(processedRevision.app.slug, createdBody.app.slug);
+      assert.equal(processedRevision.app.proofStatus, 'verified');
+      assert.equal(processedRevision.app.receiptId, processedRevision.receipt.id);
 
       const published = await fetch(`${api.baseUrl}/api/apps/${createdBody.app.slug}/publish`, {
         method: 'POST',
@@ -581,6 +699,8 @@ describe('Kelyra hosted API', () => {
       const publishedBody = await published.json();
       assert.equal(published.status, 200);
       assert.equal(publishedBody.app.status, 'published');
+      assert.equal(publishedBody.app.proofStatus, 'verified');
+      assert.equal(publishedBody.app.receiptId, processedRevision.receipt.id);
 
       const deleted = await fetch(`${api.baseUrl}/api/apps/${createdBody.app.slug}`, {
         method: 'DELETE',
