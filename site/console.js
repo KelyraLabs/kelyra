@@ -28,7 +28,11 @@ const forgePreviewTitle = document.querySelector('[data-forge-preview-title]');
 const forgePreviewBody = document.querySelector('.forge-preview-body');
 const forgePreviewOpen = document.querySelector('[data-forge-open]');
 const forgeAppList = document.querySelector('[data-forge-apps]');
+const forgeReviseButton = document.querySelector('[data-forge-revise]');
+const forgePublishButton = document.querySelector('[data-forge-publish]');
+const forgeDeleteButton = document.querySelector('[data-forge-delete]');
 const connectButton = document.querySelector('[data-connect]');
+const logoutButton = document.querySelector('[data-logout]');
 const authPanel = document.querySelector('[data-auth-panel]');
 const authForm = document.querySelector('[data-auth-form]');
 const authInput = document.querySelector('[data-access-code]');
@@ -44,6 +48,7 @@ const quotaProof = document.querySelector('[data-quota-proof]');
 const quotaOracle = document.querySelector('[data-quota-oracle]');
 const quotaData = document.querySelector('[data-quota-data]');
 const quotaReset = document.querySelector('[data-quota-reset]');
+const runtimeGrid = document.querySelector('[data-runtime-grid]');
 
 const titles = {
   chat: 'Oracle',
@@ -63,6 +68,7 @@ const state = {
   forgeLoaded: false,
   forgeApps: [],
   selectedForgeSlug: '',
+  selectedForgeApp: null,
   health: null,
   accessCodeEnabled: true,
   tokenGateRequired: false,
@@ -112,9 +118,11 @@ function renderQuotaProfile(profile) {
     ? Math.max(...rows.map((item) => Math.min(1, Number(item.used || 0) / Number(item.limit || 1))))
     : 0;
   if (quotaFill) quotaFill.style.width = `${Math.round(usedRatio * 100)}%`;
+  renderRuntimeGrid();
 }
 
 function renderQuotaOffline(message = 'Quota unavailable') {
+  state.quotaProfile = null;
   if (quotaTier) quotaTier.textContent = 'Offline';
   if (quotaMode) quotaMode.textContent = message;
   if (quotaBuild) quotaBuild.textContent = '--';
@@ -123,6 +131,7 @@ function renderQuotaOffline(message = 'Quota unavailable') {
   if (quotaData) quotaData.textContent = '--';
   if (quotaReset) quotaReset.textContent = 'Reset pending';
   if (quotaFill) quotaFill.style.width = '0%';
+  renderRuntimeGrid();
 }
 
 function updateAuthPanelUi() {
@@ -138,6 +147,7 @@ function updateAuthPanelUi() {
       authCopy.textContent = 'Connect a wallet to open the hosted workspace.';
     }
   }
+  renderRuntimeGrid();
 }
 
 function updateAuthUi() {
@@ -150,10 +160,50 @@ function updateAuthUi() {
         : 'Beta Access'
       : 'Connect Wallet';
     connectButton.classList.toggle('is-authenticated', state.authenticated);
+    if (logoutButton) logoutButton.hidden = !state.authenticated;
     return;
   }
   connectButton.textContent = 'Connect Wallet';
   connectButton.classList.remove('is-authenticated');
+  if (logoutButton) logoutButton.hidden = true;
+}
+
+function renderRuntimeGrid() {
+  if (!runtimeGrid) return;
+  const runtime = state.bridgeOnline ? 'Local runtime' : state.hostedOnline ? 'Hosted API' : 'Offline';
+  const auth = state.hostedOnline
+    ? state.authenticated
+      ? (state.session?.wallet?.address ? 'Wallet session' : 'Beta session')
+      : 'Not signed in'
+    : state.bridgeOnline
+      ? 'Local only'
+      : 'Unavailable';
+  const gate = state.tokenGateRequired
+    ? (state.tokenMinimumLabel || 'Token gate required')
+    : 'Token gate off';
+  const quota = state.quotaProfile?.tier?.name
+    ? `${state.quotaProfile.tier.name} · ${state.quotaProfile.quotaMode || 'full'}`
+    : state.hostedOnline
+      ? 'Resolving'
+      : 'No hosted quota';
+  const cards = [
+    ['Runtime', runtime, state.health?.runnerMode || state.health?.runtime || 'No runner detected'],
+    ['Auth', auth, state.accessCodeEnabled ? 'Access code fallback enabled' : 'Wallet flow only'],
+    ['Gate', gate, state.tokenGateRequired ? 'Wallet balance is enforced' : 'Token gate will be enabled last'],
+    ['Quota', quota, state.quotaProfile?.window?.resetAt ? resetLabel(state.quotaProfile.window.resetAt) : 'UTC daily window'],
+    ['Store', state.health?.store || (state.bridgeOnline ? 'local files' : 'unknown'), state.health?.environment || state.health?.workspace || 'No environment report'],
+    ['Worker', state.health?.features?.hostedWorker ? 'Hosted worker' : state.health?.runnerMode || 'Not connected', state.health?.features?.proofJobs ? 'Proof jobs available' : 'Proof jobs unavailable'],
+  ];
+  runtimeGrid.replaceChildren();
+  for (const [label, value, detail] of cards) {
+    const card = document.createElement('article');
+    card.innerHTML = '<span></span><strong></strong><p></p>';
+    card.querySelector('span').textContent = label;
+    card.querySelector('strong').textContent = value;
+    card.querySelector('strong').title = value;
+    card.querySelector('p').textContent = detail || '';
+    runtimeGrid.append(card);
+  }
 }
 
 function openAuthPanel() {
@@ -167,6 +217,29 @@ function closeAuthPanel() {
   if (!authPanel) return;
   authPanel.hidden = true;
   if (authInput) authInput.value = '';
+}
+
+async function logoutHostedSession() {
+  if (!state.hostedOnline) return;
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch {
+    // The local UI still clears session state when the server is unreachable.
+  }
+  state.authenticated = false;
+  state.session = null;
+  state.forgeApps = [];
+  state.forgeLoaded = false;
+  updateAuthUi();
+  updateAuthPanelUi();
+  await refreshQuotaProfile(true);
+  renderHostedHistory([], [], 'Sign in to read hosted receipts and proof jobs.');
+  resetForgePreview();
+  showToast('Signed out.');
 }
 
 async function refreshHostedSession() {
@@ -303,6 +376,7 @@ async function connectWalletAuth() {
     showToast('Wallet connected.');
     await refreshHostedSession();
     await refreshQuotaProfile(true);
+    await refreshHostedHistory(true);
     await loadForgeApps(true).catch(() => {});
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -461,6 +535,105 @@ function renderReceipts(receipts, message) {
   }
 }
 
+function historyTime(item) {
+  return item.timestamp || item.completedAt || item.updatedAt || item.createdAt || '';
+}
+
+function renderHostedHistory(receipts = [], jobs = [], message) {
+  if (!receiptList) return;
+  const items = [
+    ...receipts.map((receipt) => ({ type: 'receipt', item: receipt, time: historyTime(receipt) })),
+    ...jobs.map((job) => ({ type: 'job', item: job, time: historyTime(job) })),
+  ].sort((a, b) => Date.parse(b.time || 0) - Date.parse(a.time || 0));
+
+  if (historyBridge) historyBridge.textContent = state.hostedOnline ? 'hosted' : 'offline';
+  if (receiptCount) receiptCount.textContent = String(items.length);
+  if (latestReceipt) {
+    const latest = items[0]?.item?.id || 'none';
+    latestReceipt.textContent = shortReceiptId(latest);
+    latestReceipt.title = latest;
+  }
+
+  receiptList.replaceChildren();
+  if (!items.length) {
+    const note = document.createElement('p');
+    note.className = 'receipt-note';
+    note.dataset.historyEmpty = '';
+    note.textContent = message || 'No hosted jobs or receipts yet.';
+    receiptList.append(note);
+    return;
+  }
+
+  for (const entry of items.slice(0, 10)) {
+    const item = entry.item;
+    const isReceipt = entry.type === 'receipt';
+    const status = isReceipt ? (item.success ? 'completed' : 'needs review') : (item.status || 'queued');
+    const row = document.createElement('article');
+    row.className = 'receipt-row';
+
+    const marker = document.createElement('span');
+    marker.className = `receipt-marker ${status === 'completed' ? 'ok' : 'warn'}`;
+    marker.textContent = isReceipt ? 'receipt' : 'job';
+
+    const main = document.createElement('div');
+    const id = document.createElement('strong');
+    id.textContent = shortReceiptId(item.id);
+    id.title = item.id || '';
+    const summary = document.createElement('p');
+    summary.textContent = isReceipt
+      ? item.summary || 'Hosted proof receipt'
+      : item.result?.summary || item.promptPreview || item.reason || 'Hosted proof job';
+    main.append(id, summary);
+
+    const meta = document.createElement('div');
+    meta.className = 'receipt-meta';
+    const type = document.createElement('span');
+    type.textContent = isReceipt ? 'receipt' : status;
+    const source = document.createElement('span');
+    source.textContent = isReceipt ? item.provider || 'hosted-worker' : item.runnerMode || 'queue';
+    const time = document.createElement('span');
+    time.textContent = formatReceiptDate(entry.time);
+    meta.append(type, source, time);
+
+    row.append(marker, main, meta);
+    receiptList.append(row);
+  }
+}
+
+async function refreshHostedHistory(silent = true) {
+  if (!state.hostedOnline) return null;
+  if (!state.authenticated) {
+    renderHostedHistory([], [], 'Sign in to read hosted receipts and proof jobs.');
+    return null;
+  }
+
+  try {
+    const [receiptsResponse, jobsResponse] = await Promise.all([
+      fetch('/api/receipts', {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: { 'Cache-Control': 'no-cache' },
+      }),
+      fetch('/api/proof/jobs?limit=50', {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: { 'Cache-Control': 'no-cache' },
+      }),
+    ]);
+    const receiptsPayload = await receiptsResponse.json().catch(() => ({}));
+    const jobsPayload = await jobsResponse.json().catch(() => ({}));
+    if (!receiptsResponse.ok || !receiptsPayload.ok) throw new Error(receiptsPayload.error || `HTTP_${receiptsResponse.status}`);
+    if (!jobsResponse.ok || !jobsPayload.ok) throw new Error(jobsPayload.error || `HTTP_${jobsResponse.status}`);
+    renderHostedHistory(receiptsPayload.receipts || [], jobsPayload.jobs || []);
+    if (!silent) showToast('History refreshed.');
+    return { receipts: receiptsPayload.receipts || [], jobs: jobsPayload.jobs || [] };
+  } catch (err) {
+    renderHostedHistory([], [], 'Hosted history unavailable.');
+    if (!silent) showToast('History unavailable.');
+    return null;
+  }
+}
+
 function renderPulseLane(name, items) {
   const node = [...pulseLaneNodes].find((lane) => lane.getAttribute('data-pulse-lane') === name);
   if (!node) return;
@@ -520,6 +693,34 @@ function summarizePulseForChat(payload) {
     .join(', ') || 'none';
   const undervalued = (lanes.undervalued || []).slice(0, 3).map(tokenLabel).join(', ') || 'none';
   return `Pulse loaded from ${payload.source}. Momentum: ${momentum}. Fresh pools: ${fresh}. Risk radar: ${risk}. Undervalued watch: ${undervalued}. This is a screening feed, not a recommendation.`;
+}
+
+function currentForgeApp() {
+  return state.forgeApps.find((app) => app.slug === state.selectedForgeSlug) || state.selectedForgeApp || null;
+}
+
+function updateForgeActionUi(app = currentForgeApp()) {
+  const lifecycleReady = Boolean(state.hostedOnline && !state.bridgeOnline && state.authenticated && app?.slug);
+  if (forgeReviseButton) forgeReviseButton.disabled = !lifecycleReady;
+  if (forgePublishButton) {
+    forgePublishButton.disabled = !lifecycleReady || app?.status === 'published';
+    forgePublishButton.textContent = app?.status === 'published' ? 'Published' : 'Publish';
+  }
+  if (forgeDeleteButton) forgeDeleteButton.disabled = !lifecycleReady;
+}
+
+function resetForgePreview() {
+  state.selectedForgeSlug = '';
+  state.selectedForgeApp = null;
+  if (forgePreviewTitle) forgePreviewTitle.textContent = 'No draft selected';
+  if (forgePreviewOpen) {
+    forgePreviewOpen.href = '#';
+    forgePreviewOpen.setAttribute('aria-disabled', 'true');
+  }
+  if (forgePreview) forgePreview.removeAttribute('src');
+  forgePreviewBody?.classList.remove('has-preview');
+  updateForgeActionUi(null);
+  renderForgeApps(state.forgeApps);
 }
 
 function renderForgeApp(app) {
@@ -590,6 +791,7 @@ function renderForgeApps(apps) {
 function selectForgeApp(app) {
   if (!app?.previewUrl || !forgePreview) return;
   state.selectedForgeSlug = app.slug || '';
+  state.selectedForgeApp = app;
   if (forgePreviewTitle) forgePreviewTitle.textContent = app.title || app.slug || 'Forge draft';
   if (forgePreviewOpen) {
     forgePreviewOpen.href = app.previewUrl;
@@ -597,6 +799,7 @@ function selectForgeApp(app) {
   }
   forgePreview.src = app.previewUrl;
   forgePreviewBody?.classList.add('has-preview');
+  updateForgeActionUi(app);
   renderForgeApps(state.forgeApps);
 }
 
@@ -604,7 +807,10 @@ async function loadForgeApps(silent = false) {
   if (state.hostedOnline && !state.bridgeOnline && !state.authenticated) {
     state.forgeLoaded = true;
     state.forgeApps = [];
+    state.selectedForgeSlug = '';
+    state.selectedForgeApp = null;
     renderForgeApps([]);
+    updateForgeActionUi(null);
     if (!silent) openAuthPanel();
     return;
   }
@@ -618,7 +824,14 @@ async function loadForgeApps(silent = false) {
     state.forgeApps = Array.isArray(payload.apps) ? payload.apps : [];
     state.forgeLoaded = true;
     renderForgeApps(state.forgeApps);
-    if (!state.selectedForgeSlug && state.forgeApps[0]) selectForgeApp(state.forgeApps[0]);
+    const selected = state.forgeApps.find((app) => app.slug === state.selectedForgeSlug);
+    if (selected) {
+      selectForgeApp(selected);
+    } else if (state.forgeApps[0]) {
+      selectForgeApp(state.forgeApps[0]);
+    } else {
+      resetForgePreview();
+    }
     if (!silent) showToast('Forge drafts refreshed.');
   } catch (err) {
     if (forgeAppList) {
@@ -716,6 +929,7 @@ function setBridgeOffline(message = 'Run kelyra console') {
   if (latestReceipt) latestReceipt.textContent = 'none';
   if (historyEmpty) historyEmpty.textContent = 'Run kelyra console from a project to read receipts here.';
   renderReceipts([], 'Run kelyra console from a project to read receipts here.');
+  renderRuntimeGrid();
 }
 
 function setHostedOnline(health) {
@@ -734,6 +948,7 @@ function setHostedOnline(health) {
   if (latestReceipt) latestReceipt.textContent = 'auth required';
   if (historyEmpty) historyEmpty.textContent = 'Sign in to read hosted receipts and proof jobs.';
   renderReceipts([], 'Sign in to read hosted receipts and proof jobs.');
+  renderRuntimeGrid();
 }
 
 function setBridgeOnline(health) {
@@ -767,6 +982,7 @@ function setBridgeOnline(health) {
       : 'Runtime online. Run a proof to create the first local receipt.';
   }
   renderReceipts(receipts);
+  renderRuntimeGrid();
 }
 
 async function refreshBridge() {
@@ -796,6 +1012,8 @@ async function refreshBridge() {
       await refreshPublicGate();
       await refreshHostedSession();
       await refreshQuotaProfile(true);
+      await refreshHostedHistory(true);
+      renderRuntimeGrid();
     } catch {
       setBridgeOffline();
     }
@@ -1024,6 +1242,117 @@ async function runForgeBuild(prompt) {
   }
 }
 
+async function hostedForgeLifecycleRequest(app, action, options = {}) {
+  if (!app?.slug) throw new Error('Select a Forge draft first.');
+  if (state.bridgeOnline || !state.hostedOnline) {
+    throw new Error('Forge lifecycle actions are available on the hosted API.');
+  }
+  if (!requireHostedAuth(`Sign in to ${action} hosted Forge drafts.`)) {
+    throw new Error('AUTH_REQUIRED');
+  }
+
+  const response = await fetch(options.path || `/api/apps/${encodeURIComponent(app.slug)}`, {
+    method: options.method || 'PATCH',
+    credentials: 'same-origin',
+    headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP_${response.status}`);
+  return payload;
+}
+
+async function reviseSelectedForgeApp() {
+  const app = currentForgeApp();
+  const prompt = forgePrompt?.value.trim();
+  if (!app?.slug) {
+    showToast('Select a Forge draft first.');
+    return;
+  }
+  if (!prompt) {
+    forgePrompt?.focus();
+    showToast('Write the revision brief in App brief.');
+    return;
+  }
+
+  try {
+    updateForgeActionUi(null);
+    if (forgeOutput) {
+      forgeOutput.innerHTML = '<span>Forge result</span><strong>Revising draft...</strong><p>Creating a new SWD-backed app revision.</p>';
+    }
+    const payload = await hostedForgeLifecycleRequest(app, 'revise', {
+      method: 'PATCH',
+      body: { prompt },
+    });
+    state.forgeApps = [payload.app, ...state.forgeApps.filter((item) => item.slug !== payload.app?.slug)];
+    renderForgeApp(payload.app);
+    renderForgeApps(state.forgeApps);
+    if (proofState) proofState.textContent = 'Revision queued';
+    if (proofDetail) proofDetail.textContent = payload.job?.id || payload.app?.slug || 'Forge revision saved';
+    if (proofPath) proofPath.textContent = 'Brief -> Forge revision -> Hosted job';
+    await refreshQuotaProfile(true);
+    showToast('Forge draft revised.');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    showToast(`Forge revise failed: ${message}`);
+    updateForgeActionUi(app);
+  }
+}
+
+async function publishSelectedForgeApp() {
+  const app = currentForgeApp();
+  if (!app?.slug) {
+    showToast('Select a Forge draft first.');
+    return;
+  }
+
+  try {
+    updateForgeActionUi(null);
+    const payload = await hostedForgeLifecycleRequest(app, 'publish', {
+      method: 'POST',
+      path: `/api/apps/${encodeURIComponent(app.slug)}/publish`,
+    });
+    state.forgeApps = [payload.app, ...state.forgeApps.filter((item) => item.slug !== payload.app?.slug)];
+    renderForgeApp(payload.app);
+    renderForgeApps(state.forgeApps);
+    if (proofState) proofState.textContent = 'Published';
+    if (proofDetail) proofDetail.textContent = payload.app?.publicUrl || payload.app?.previewUrl || payload.app?.slug;
+    if (proofPath) proofPath.textContent = 'Draft -> Publish state -> Preview URL';
+    showToast('Forge draft published.');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    showToast(`Publish failed: ${message}`);
+    updateForgeActionUi(app);
+  }
+}
+
+async function deleteSelectedForgeApp() {
+  const app = currentForgeApp();
+  if (!app?.slug) {
+    showToast('Select a Forge draft first.');
+    return;
+  }
+  if (!window.confirm(`Delete "${app.title || app.slug}"?`)) return;
+
+  try {
+    updateForgeActionUi(null);
+    await hostedForgeLifecycleRequest(app, 'delete', {
+      method: 'DELETE',
+    });
+    state.forgeApps = state.forgeApps.filter((item) => item.slug !== app.slug);
+    resetForgePreview();
+    renderForgeApps(state.forgeApps);
+    if (forgeOutput) {
+      forgeOutput.innerHTML = '<span>Forge result</span><strong>Draft deleted</strong><p>The hosted app draft was removed from this session library.</p>';
+    }
+    showToast('Forge draft deleted.');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    showToast(`Delete failed: ${message}`);
+    updateForgeActionUi(app);
+  }
+}
+
 async function runLocalProof(prompt) {
   if (!state.bridgeOnline) {
     if (state.hostedOnline) {
@@ -1042,6 +1371,7 @@ async function runLocalProof(prompt) {
         });
         pending?.querySelector('p')?.replaceChildren(document.createTextNode(`Hosted proof job queued: ${payload.job.id}. Runner mode: ${payload.job.runnerMode}.`));
         await refreshQuotaProfile(true);
+        await refreshHostedHistory(true);
         if (proofState) proofState.textContent = 'Queued';
         if (proofDetail) proofDetail.textContent = payload.job.id;
         if (proofPath) proofPath.textContent = 'Prompt -> Hosted API -> Proof job';
@@ -1147,6 +1477,14 @@ document.querySelector('[data-load-pulse]')?.addEventListener('click', () => {
   loadPulse(false).catch(() => {});
 });
 
+document.querySelector('[data-history-refresh]')?.addEventListener('click', () => {
+  if (state.hostedOnline) {
+    refreshHostedHistory(false).catch(() => {});
+    return;
+  }
+  refreshBridge().then(() => showToast('History refreshed.')).catch(() => showToast('History unavailable.'));
+});
+
 document.querySelector('[data-forge-load]')?.addEventListener('click', () => {
   loadForgeApps(false).catch(() => {});
 });
@@ -1158,6 +1496,18 @@ document.querySelector('[data-forge-refresh]')?.addEventListener('click', () => 
   }
   forgePreview.src = forgePreview.src;
   showToast('Forge preview reloaded.');
+});
+
+forgeReviseButton?.addEventListener('click', () => {
+  reviseSelectedForgeApp().catch(() => {});
+});
+
+forgePublishButton?.addEventListener('click', () => {
+  publishSelectedForgeApp().catch(() => {});
+});
+
+forgeDeleteButton?.addEventListener('click', () => {
+  deleteSelectedForgeApp().catch(() => {});
 });
 
 forgeForm?.addEventListener('submit', async (event) => {
@@ -1192,6 +1542,10 @@ connectButton?.addEventListener('click', () => {
     return;
   }
   showToast('Hosted beta access is available when the console is served by the Kelyra API.');
+});
+
+logoutButton?.addEventListener('click', () => {
+  logoutHostedSession().catch(() => showToast('Sign out failed.'));
 });
 
 walletAuthButton?.addEventListener('click', connectWalletAuth);
@@ -1230,6 +1584,7 @@ authForm?.addEventListener('submit', async (event) => {
     showToast('Hosted workspace unlocked.');
     await refreshHostedSession();
     await refreshQuotaProfile(true);
+    await refreshHostedHistory(true);
     await loadForgeApps(true).catch(() => {});
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
