@@ -461,6 +461,15 @@ button {
   color: #9df0ba;
 }
 
+.top-actions .logout {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.top-actions .logout[hidden] {
+  display: none;
+}
+
 .top-actions button:hover,
 .top-actions a:hover,
 .dock-card button:hover,
@@ -923,6 +932,21 @@ button {
   margin-top: 12px;
 }
 
+.history-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.history-actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(125, 233, 240, 0.24);
+  border-radius: 8px;
+  background: rgba(125, 233, 240, 0.075);
+  color: var(--cyan);
+}
+
 .receipt-row {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) minmax(260px, 0.45fr);
@@ -1027,6 +1051,49 @@ button {
   border-top: 1px solid var(--line);
   color: var(--cyan);
   font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.runtime-grid article {
+  min-height: 118px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.026), transparent),
+    rgba(13, 15, 22, 0.76);
+}
+
+.runtime-grid span {
+  display: block;
+  color: var(--cyan);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.runtime-grid strong {
+  display: block;
+  margin: 8px 0 6px;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-grid p {
+  margin: 0;
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -1181,6 +1248,8 @@ button {
 .forge-preview-actions {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -1196,6 +1265,17 @@ button {
   border-radius: 8px;
   background: rgba(125, 233, 240, 0.075);
   color: var(--cyan);
+}
+
+.forge-preview-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.forge-preview-actions [data-forge-delete] {
+  border-color: rgba(255, 120, 120, 0.22);
+  background: rgba(255, 120, 120, 0.055);
+  color: #ffb5b5;
 }
 
 .forge-preview-actions a[aria-disabled="true"] {
@@ -1555,6 +1635,7 @@ button {
   .docs-grid,
   .receipt-toolbar,
   .docs-list,
+  .runtime-grid,
   .forge-app-list,
   .studio-layout {
     grid-template-columns: 1fr;

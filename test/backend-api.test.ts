@@ -185,6 +185,38 @@ describe('Kelyra hosted API', () => {
     }
   });
 
+  it('clears hosted sessions through logout', async () => {
+    const api = await startApi();
+    try {
+      const cookie = await login(api.baseUrl);
+      const session = await fetch(`${api.baseUrl}/api/auth/session`, {
+        headers: { cookie },
+      });
+      const sessionBody = await session.json();
+      assert.equal(session.status, 200);
+      assert.equal(sessionBody.authenticated, true);
+
+      const logout = await fetch(`${api.baseUrl}/api/auth/logout`, {
+        method: 'POST',
+        headers: { cookie, origin: 'http://127.0.0.1:4340' },
+      });
+      const logoutBody = await logout.json();
+      const clearCookie = logout.headers.get('set-cookie') || '';
+      assert.equal(logout.status, 200);
+      assert.equal(logoutBody.authenticated, false);
+      assert.match(clearCookie, /kelyra_session=;/);
+      assert.match(clearCookie, /Max-Age=0/);
+
+      const clearedSession = await fetch(`${api.baseUrl}/api/auth/session`, {
+        headers: { cookie: clearCookie },
+      });
+      const clearedBody = await clearedSession.json();
+      assert.equal(clearedBody.authenticated, false);
+    } finally {
+      await api.close();
+    }
+  });
+
   it('assigns wallet tiers from token-holder balance metadata', async () => {
     const api = await startApi({
       env: {
@@ -466,6 +498,11 @@ describe('Kelyra hosted API', () => {
       assert.equal(response.status, 200);
       assert.match(response.headers.get('content-type') || '', /text\/html/);
       assert.match(body, /Kelyra Console/);
+      assert.match(body, /data-logout/);
+      assert.match(body, /data-forge-revise/);
+      assert.match(body, /data-forge-publish/);
+      assert.match(body, /data-forge-delete/);
+      assert.match(body, /data-runtime-grid/);
     } finally {
       await api.close();
     }

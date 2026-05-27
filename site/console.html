@@ -69,6 +69,7 @@
           <div class="top-actions">
             <button type="button" data-new-chat>New Chat</button>
             <button class="connect" type="button" data-connect>Connect Wallet</button>
+            <button class="logout" type="button" data-logout hidden>Sign Out</button>
             <a href="./index.html" aria-label="Close console">×</a>
           </div>
         </header>
@@ -204,6 +205,9 @@
                   <strong data-forge-preview-title>No draft selected</strong>
                 </div>
                 <div class="forge-preview-actions">
+                  <button type="button" data-forge-revise disabled>Revise</button>
+                  <button type="button" data-forge-publish disabled>Publish</button>
+                  <button type="button" data-forge-delete disabled>Delete</button>
                   <button type="button" data-forge-refresh>Reload</button>
                   <a href="#" target="_blank" rel="noreferrer" data-forge-open aria-disabled="true">Open</a>
                 </div>
@@ -240,6 +244,9 @@
               <article><span>Receipts</span><strong data-receipt-count>0</strong></article>
               <article><span>Latest</span><strong data-latest-receipt>none</strong></article>
             </div>
+            <div class="history-actions">
+              <button type="button" data-history-refresh>Refresh history</button>
+            </div>
             <div class="receipt-list" data-receipt-list>
               <p class="receipt-note" data-history-empty>Start the local runtime to read receipts from this workspace.</p>
             </div>
@@ -259,6 +266,7 @@
               <article><span>Policy</span><strong>CI gates</strong><p>Use policy templates and receipt checks before a PR reaches main.</p><code>kelyra setup-ci --strict</code></article>
               <article><span>Hosted</span><strong>API boundary</strong><p>Public console routes use backend auth and queued proof jobs, not local filesystem execution.</p><code>npm run backend:dev</code></article>
             </div>
+            <div class="runtime-grid" data-runtime-grid aria-live="polite"></div>
           </div>
         </section>
       </main>
