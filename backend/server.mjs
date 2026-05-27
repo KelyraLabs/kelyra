@@ -246,8 +246,11 @@ function lowestTokenMinimum(tierConfig) {
 export function loadConfig(env = process.env) {
   const environment = env.NODE_ENV || 'development';
   const production = environment === 'production';
+  const accessCodeEnabled = boolEnv(env.KELYRA_ACCESS_CODE_ENABLED, true);
   const apiSecret = env.KELYRA_API_SECRET || (production ? '' : 'dev-kelyra-api-secret-change-before-production');
-  const accessCodeHash = env.KELYRA_ACCESS_CODE_SHA256 || (production ? '' : sha256('dev-kelyra'));
+  const accessCodeHash = accessCodeEnabled
+    ? env.KELYRA_ACCESS_CODE_SHA256 || (production ? '' : sha256('dev-kelyra'))
+    : '';
   const databaseUrl = env.DATABASE_URL || '';
   const storeDirValue = env.KELYRA_STORE_DIR || (production ? '' : '.kelyra-cloud-dev');
   const storeDir = storeDirValue ? resolve(storeDirValue) : '';
@@ -261,7 +264,7 @@ export function loadConfig(env = process.env) {
     throw new Error('KELYRA_API_SECRET must be at least 32 characters.');
   }
 
-  if (!accessCodeHash) {
+  if (accessCodeEnabled && !accessCodeHash) {
     throw new Error('KELYRA_ACCESS_CODE_SHA256 is required.');
   }
 
@@ -275,6 +278,7 @@ export function loadConfig(env = process.env) {
 
   return {
     accessCodeHash,
+    accessCodeEnabled,
     allowedOrigins,
     apiSecret,
     baseRpcUrl: env.KELYRA_BASE_RPC_URL || 'https://mainnet.base.org',
@@ -1467,7 +1471,7 @@ function publicTierConfig(config) {
   const { internalTiers, accessCodeTierId, ...publicConfig } = config.tierConfig;
   const gate = {
     walletAuth: true,
-    accessCodeBeta: true,
+    accessCodeBeta: config.accessCodeEnabled,
     tokenGate: config.requireTokenHolder
       ? {
 	          required: true,
@@ -2310,7 +2314,8 @@ export function createKelyraApiServer(options = {}) {
           store: config.databaseUrl ? 'postgres' : 'file',
           static: true,
 	          features: {
-	            auth: 'access-code-beta+wallet',
+	            auth: config.accessCodeEnabled ? 'access-code-beta+wallet' : 'wallet',
+	            accessCodeBeta: config.accessCodeEnabled,
 	            tokenGate: config.requireTokenHolder,
 	            tiers: true,
 	            pulse: true,
@@ -2343,7 +2348,7 @@ export function createKelyraApiServer(options = {}) {
         json(config, req, res, 200, {
           ok: true,
           authenticated: Boolean(session),
-          authMode: 'access-code-beta+wallet',
+          authMode: config.accessCodeEnabled ? 'access-code-beta+wallet' : 'wallet',
           session: session ? {
 	            sub: session.sub,
 	            authMode: session.authMode || 'access-code',
@@ -2369,6 +2374,10 @@ export function createKelyraApiServer(options = {}) {
       }
 
       if (req.method === 'POST' && url.pathname === '/api/auth/login') {
+        if (!config.accessCodeEnabled) {
+          json(config, req, res, 403, { ok: false, error: 'ACCESS_CODE_DISABLED' });
+          return;
+        }
         const body = await readJsonBody(req);
         if (!safeEqual(sha256(body.accessCode || ''), config.accessCodeHash)) {
           json(config, req, res, 403, { ok: false, error: 'ACCESS_DENIED' });

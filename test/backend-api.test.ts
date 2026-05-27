@@ -93,9 +93,47 @@ describe('Kelyra hosted API', () => {
       assert.ok(body.tiers.some((tier: any) => tier.id === 'ultimate' && tier.tokenMinimum === '1000000000'));
       assert.ok(body.quotaTypes.some((type: any) => type.id === 'buildActions'));
       assert.equal(body.gate.tokenGate.thresholds[0].tierId, 'basic');
+      assert.equal(body.gate.accessCodeBeta, true);
     } finally {
       await api.close();
     }
+  });
+
+  it('can disable access-code beta without exposing the fallback in public config', async () => {
+    const api = await startApi({ env: { KELYRA_ACCESS_CODE_ENABLED: 'false' } });
+    try {
+      const tiers = await fetch(`${api.baseUrl}/api/tiers`);
+      const tiersBody = await tiers.json();
+      assert.equal(tiers.status, 200);
+      assert.equal(tiersBody.gate.accessCodeBeta, false);
+
+      const login = await fetch(`${api.baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://127.0.0.1:4340',
+        },
+        body: JSON.stringify({ accessCode: 'test-access' }),
+      });
+      const loginBody = await login.json();
+      assert.equal(login.status, 403);
+      assert.equal(loginBody.error, 'ACCESS_CODE_DISABLED');
+    } finally {
+      await api.close();
+    }
+  });
+
+  it('does not require an access-code hash when beta codes are disabled in production config', async () => {
+    const { loadConfig } = await import('../backend/server.mjs');
+    const config = loadConfig({
+      NODE_ENV: 'production',
+      KELYRA_API_SECRET: 'production-kelyra-api-secret-with-enough-length',
+      KELYRA_ACCESS_CODE_ENABLED: 'false',
+      KELYRA_ALLOWED_ORIGINS: 'https://kelyra.example',
+      KELYRA_STORE_DIR: '/tmp/kelyra-disabled-access-code-test',
+    });
+    assert.equal(config.accessCodeEnabled, false);
+    assert.equal(config.accessCodeHash, '');
   });
 
   it('supports wallet nonce login without requiring token gate by default', async () => {

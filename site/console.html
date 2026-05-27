@@ -39,6 +39,21 @@
             </div>
             <small data-bridge-detail>Resolving execution mode</small>
           </div>
+          <div class="quota-card" data-quota-card>
+            <div class="quota-card-top">
+              <span>Access</span>
+              <strong data-quota-tier>Checking</strong>
+            </div>
+            <small data-quota-mode>Resolving quota profile</small>
+            <div class="quota-meter" aria-hidden="true"><i data-quota-fill></i></div>
+            <div class="quota-grid">
+              <div><span>Build</span><strong data-quota-build>--</strong></div>
+              <div><span>Proof</span><strong data-quota-proof>--</strong></div>
+              <div><span>Oracle</span><strong data-quota-oracle>--</strong></div>
+              <div><span>Data</span><strong data-quota-data>--</strong></div>
+            </div>
+            <small data-quota-reset>Reset pending</small>
+          </div>
         </div>
       </aside>
 
@@ -254,12 +269,14 @@
         <button class="auth-close" type="button" data-auth-close aria-label="Close">×</button>
         <span>Hosted beta</span>
         <h2>Unlock hosted workspace</h2>
-        <p>Connect a wallet for token-gated access, or use a beta access code while access is controlled.</p>
+        <p data-auth-copy>Connect a wallet for token-gated access, or use a beta access code while access is controlled.</p>
         <button class="wallet-auth" type="button" data-wallet-auth>Connect Wallet</button>
-        <div class="auth-divider"><span>or</span></div>
-        <label for="access-code">Access code</label>
-        <input id="access-code" data-access-code name="accessCode" type="password" autocomplete="one-time-code" placeholder="Enter access code">
-        <button type="submit">Continue</button>
+        <div data-access-code-section>
+          <div class="auth-divider"><span>or</span></div>
+          <label for="access-code">Access code</label>
+          <input id="access-code" data-access-code name="accessCode" type="password" autocomplete="one-time-code" placeholder="Enter access code">
+          <button type="submit">Continue</button>
+        </div>
       </form>
     </div>
 

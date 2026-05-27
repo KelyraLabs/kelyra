@@ -46,6 +46,7 @@ KELYRA_RUNNER_MODE=hosted-worker
 KELYRA_BASE_RPC_URL=https://mainnet.base.org
 KELYRA_REQUIRE_TOKEN_HOLDER=true
 KELYRA_TOKEN_ADDRESS=<base-erc20-contract-address>
+KELYRA_ACCESS_CODE_ENABLED=true
 KELYRA_TIER_TOKEN_SYMBOL=KELYRA
 KELYRA_BASIC_TOKEN_MIN=5000000
 KELYRA_CORE_TOKEN_MIN=50000000
@@ -75,6 +76,8 @@ balance on Base. The wallet tier is selected from the configured token threshold
 Basic, Core, Pro, or Ultimate. Keep `KELYRA_ACCESS_CODE_SHA256` available only
 for internal beta users or emergency access. Access-code sessions use the hidden
 `operator` tier by default so internal smoke tests do not spend public holder quota.
+Set `KELYRA_ACCESS_CODE_ENABLED=false` before public wallet-only launch if beta
+codes should be unavailable from the API and hidden from the console.
 
 Daily quotas are served from `/api/tiers` and enforced by the backend. Wallet
 sessions start on fresh quota unless yesterday's UTC holder snapshot already met
