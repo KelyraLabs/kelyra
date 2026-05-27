@@ -5,7 +5,7 @@ All notable changes to Kelyra will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.13.0] - 2026-05-25
+## [0.1.0] - 2026-05-27
 
 ### Added
 
@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCP tools for SWD dry-run/apply, receipt inspection/signing, policy checks, trusted keys, proof export, and patch application.
 - Model-free external-agent `PATCH` actions with bounded payload size.
 - Provider readiness checks for protocol tools versus model-backed `chat`/`run`.
+- Hosted API, watch-only public console launch mode, token-tier quota configuration, and Railway deployment files.
+- Landing, protocol, tiers, and console pages for the Kelyra launch.
 
 ### Changed
 
