@@ -34,6 +34,16 @@ const authForm = document.querySelector('[data-auth-form]');
 const authInput = document.querySelector('[data-access-code]');
 const authClose = document.querySelector('[data-auth-close]');
 const walletAuthButton = document.querySelector('[data-wallet-auth]');
+const authCopy = document.querySelector('[data-auth-copy]');
+const accessCodeSection = document.querySelector('[data-access-code-section]');
+const quotaTier = document.querySelector('[data-quota-tier]');
+const quotaMode = document.querySelector('[data-quota-mode]');
+const quotaFill = document.querySelector('[data-quota-fill]');
+const quotaBuild = document.querySelector('[data-quota-build]');
+const quotaProof = document.querySelector('[data-quota-proof]');
+const quotaOracle = document.querySelector('[data-quota-oracle]');
+const quotaData = document.querySelector('[data-quota-data]');
+const quotaReset = document.querySelector('[data-quota-reset]');
 
 const titles = {
   chat: 'Oracle',
@@ -54,6 +64,10 @@ const state = {
   forgeApps: [],
   selectedForgeSlug: '',
   health: null,
+  accessCodeEnabled: true,
+  tokenGateRequired: false,
+  tokenMinimumLabel: '',
+  quotaProfile: null,
 };
 
 function showToast(message) {
@@ -64,6 +78,66 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => {
     toast.classList.remove('is-visible');
   }, 2200);
+}
+
+function quotaValueLabel(item) {
+  if (!item) return '--';
+  if (item.limit === null || item.remaining === null) return 'unlimited';
+  return `${Math.max(0, Number(item.remaining || 0))}/${Number(item.limit || 0)}`;
+}
+
+function resetLabel(iso) {
+  if (!iso) return 'Reset pending';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Reset pending';
+  return `Resets ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function renderQuotaProfile(profile) {
+  state.quotaProfile = profile || null;
+  const usage = profile?.quotas?.usage || {};
+  if (quotaTier) quotaTier.textContent = profile?.tier?.name || 'Public';
+  if (quotaMode) {
+    const mode = profile?.quotaMode === 'fresh' ? 'Fresh quota' : 'Full quota';
+    quotaMode.textContent = profile?.authenticated ? `${mode} · signed in` : `${mode} · public`;
+  }
+  if (quotaBuild) quotaBuild.textContent = quotaValueLabel(usage.buildActions);
+  if (quotaProof) quotaProof.textContent = quotaValueLabel(usage.proofJobs);
+  if (quotaOracle) quotaOracle.textContent = quotaValueLabel(usage.oracleMessages);
+  if (quotaData) quotaData.textContent = quotaValueLabel(usage.dataCalls);
+  if (quotaReset) quotaReset.textContent = resetLabel(profile?.window?.resetAt);
+
+  const rows = Object.values(usage).filter((item) => item && item.limit !== null && item.limit > 0);
+  const usedRatio = rows.length
+    ? Math.max(...rows.map((item) => Math.min(1, Number(item.used || 0) / Number(item.limit || 1))))
+    : 0;
+  if (quotaFill) quotaFill.style.width = `${Math.round(usedRatio * 100)}%`;
+}
+
+function renderQuotaOffline(message = 'Quota unavailable') {
+  if (quotaTier) quotaTier.textContent = 'Offline';
+  if (quotaMode) quotaMode.textContent = message;
+  if (quotaBuild) quotaBuild.textContent = '--';
+  if (quotaProof) quotaProof.textContent = '--';
+  if (quotaOracle) quotaOracle.textContent = '--';
+  if (quotaData) quotaData.textContent = '--';
+  if (quotaReset) quotaReset.textContent = 'Reset pending';
+  if (quotaFill) quotaFill.style.width = '0%';
+}
+
+function updateAuthPanelUi() {
+  if (accessCodeSection) accessCodeSection.hidden = !state.accessCodeEnabled;
+  if (authCopy) {
+    if (state.tokenGateRequired) {
+      authCopy.textContent = state.tokenMinimumLabel
+        ? `Connect a wallet holding at least ${state.tokenMinimumLabel}.`
+        : 'Connect a wallet that meets the current token tier.';
+    } else if (state.accessCodeEnabled) {
+      authCopy.textContent = 'Connect a wallet, or use a beta access code while access is controlled.';
+    } else {
+      authCopy.textContent = 'Connect a wallet to open the hosted workspace.';
+    }
+  }
 }
 
 function updateAuthUi() {
@@ -84,8 +158,9 @@ function updateAuthUi() {
 
 function openAuthPanel() {
   if (!authPanel) return;
+  updateAuthPanelUi();
   authPanel.hidden = false;
-  authInput?.focus();
+  if (state.accessCodeEnabled) authInput?.focus();
 }
 
 function closeAuthPanel() {
@@ -107,11 +182,57 @@ async function refreshHostedSession() {
     state.authenticated = Boolean(payload.authenticated);
     state.session = payload.session || null;
     updateAuthUi();
+    updateAuthPanelUi();
     return payload;
   } catch {
     state.authenticated = false;
     state.session = null;
     updateAuthUi();
+    updateAuthPanelUi();
+    return null;
+  }
+}
+
+async function refreshPublicGate() {
+  if (!state.hostedOnline) return null;
+  try {
+    const response = await fetch('/api/tiers', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP_${response.status}`);
+    state.accessCodeEnabled = Boolean(payload.gate?.accessCodeBeta);
+    state.tokenGateRequired = Boolean(payload.gate?.tokenGate?.required);
+    state.tokenMinimumLabel = payload.gate?.tokenGate?.minimumLabel || '';
+    updateAuthPanelUi();
+    return payload;
+  } catch {
+    state.accessCodeEnabled = false;
+    updateAuthPanelUi();
+    return null;
+  }
+}
+
+async function refreshQuotaProfile(silent = true) {
+  if (!state.hostedOnline) {
+    renderQuotaOffline(state.bridgeOnline ? 'Local runtime active' : 'No hosted backend');
+    return null;
+  }
+  try {
+    const response = await fetch('/api/quota/profile', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP_${response.status}`);
+    renderQuotaProfile(payload);
+    return payload;
+  } catch (err) {
+    renderQuotaOffline('Quota profile unavailable');
+    if (!silent) showToast('Quota profile unavailable.');
     return null;
   }
 }
@@ -120,7 +241,9 @@ async function connectWalletAuth() {
   const provider = window.ethereum;
   if (!provider?.request) {
     openAuthPanel();
-    showToast('No browser wallet detected. Use the access code fallback.');
+    showToast(state.accessCodeEnabled
+      ? 'No browser wallet detected. Use the access code fallback.'
+      : 'No browser wallet detected.');
     return;
   }
 
@@ -172,10 +295,14 @@ async function connectWalletAuth() {
       authMode: 'wallet',
       wallet: verifyPayload.wallet,
       tokenGate: verifyPayload.tokenGate,
+      tier: verifyPayload.tier,
+      quotaMode: verifyPayload.tokenGate?.quotaMode,
     };
     updateAuthUi();
     closeAuthPanel();
     showToast('Wallet connected.');
+    await refreshHostedSession();
+    await refreshQuotaProfile(true);
     await loadForgeApps(true).catch(() => {});
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -504,7 +631,7 @@ async function loadForgeApps(silent = false) {
 }
 
 async function queryKelyraBridge(payload) {
-  return fetchModeJson({
+  const result = await fetchModeJson({
     localPath: '/api/local/data',
     hostedPath: '/api/data',
     authRequired: state.hostedOnline && !state.bridgeOnline,
@@ -513,6 +640,8 @@ async function queryKelyraBridge(payload) {
       body: JSON.stringify(payload),
     },
   });
+  await refreshQuotaProfile(true);
+  return result;
 }
 
 window.addEventListener('message', async (event) => {
@@ -572,7 +701,11 @@ function setBridgeOffline(message = 'Run kelyra console') {
   state.authenticated = false;
   state.session = null;
   state.agentAvailable = false;
+  state.accessCodeEnabled = true;
+  state.tokenGateRequired = false;
   updateAuthUi();
+  updateAuthPanelUi();
+  renderQuotaOffline('No hosted backend');
   if (bridgeStatus) bridgeStatus.textContent = 'Offline';
   if (bridgeDetail) bridgeDetail.textContent = message === 'Run kelyra console' ? 'No execution runtime' : message;
   if (proofState) proofState.textContent = 'Runtime offline';
@@ -589,6 +722,7 @@ function setHostedOnline(health) {
   state.bridgeOnline = false;
   state.hostedOnline = true;
   state.agentAvailable = false;
+  state.health = health;
   updateAuthUi();
   if (bridgeStatus) bridgeStatus.textContent = 'Hosted API';
   if (bridgeDetail) bridgeDetail.textContent = health.environment === 'production' ? 'Production backend' : 'Hosted backend online';
@@ -609,6 +743,8 @@ function setBridgeOnline(health) {
   state.session = null;
   state.health = health;
   updateAuthUi();
+  updateAuthPanelUi();
+  renderQuotaOffline('Local runtime active');
   updateModelStatus(health.providers);
   const receipts = Array.isArray(health.receipts) ? health.receipts : [];
   const latest = receipts[0]?.id || 'none';
@@ -657,7 +793,9 @@ async function refreshBridge() {
       const health = await response.json();
       if (!health?.ok || health.service !== 'kelyra-api') throw new Error('Hosted API unavailable');
       setHostedOnline(health);
+      await refreshPublicGate();
       await refreshHostedSession();
+      await refreshQuotaProfile(true);
     } catch {
       setBridgeOffline();
     }
@@ -773,6 +911,7 @@ async function loadPulse(silent = false) {
       hostedPath: '/api/pulse',
     });
     renderPulse(payload);
+    await refreshQuotaProfile(true);
     if (!silent) showToast('Pulse refreshed.');
     return payload;
   } catch (err) {
@@ -825,6 +964,7 @@ async function runOracle(prompt) {
       },
     });
     pending?.querySelector('p')?.replaceChildren(document.createTextNode(oracleSummary(payload)));
+    await refreshQuotaProfile(true);
     if (proofState) proofState.textContent = 'Source-backed';
     if (proofDetail) proofDetail.textContent = payload.primary?.sourceHealth?.source || 'Oracle source loaded';
     if (proofPath) proofPath.textContent = 'Prompt -> Source data -> Oracle report';
@@ -871,6 +1011,7 @@ async function runForgeBuild(prompt) {
     if (proofDetail) proofDetail.textContent = payload.app?.receiptId || payload.job?.id || 'Forge draft written';
     if (proofPath) proofPath.textContent = payload.app?.receiptId ? 'Prompt -> Forge -> SWD receipt' : 'Prompt -> Forge -> Hosted job';
     await refreshBridge();
+    await refreshQuotaProfile(true);
     await loadForgeApps(true);
     showToast('Forge draft created.');
   } catch (err) {
@@ -900,6 +1041,7 @@ async function runLocalProof(prompt) {
           },
         });
         pending?.querySelector('p')?.replaceChildren(document.createTextNode(`Hosted proof job queued: ${payload.job.id}. Runner mode: ${payload.job.runnerMode}.`));
+        await refreshQuotaProfile(true);
         if (proofState) proofState.textContent = 'Queued';
         if (proofDetail) proofDetail.textContent = payload.job.id;
         if (proofPath) proofPath.textContent = 'Prompt -> Hosted API -> Proof job';
@@ -1042,7 +1184,8 @@ document.querySelector('[data-new-chat]')?.addEventListener('click', () => {
 connectButton?.addEventListener('click', () => {
   if (state.hostedOnline) {
     if (state.authenticated) {
-      showToast('Hosted beta session is active.');
+      refreshQuotaProfile(false).catch(() => {});
+      showToast('Hosted session is active.');
       return;
     }
     connectWalletAuth();
@@ -1061,6 +1204,10 @@ authPanel?.addEventListener('click', (event) => {
 
 authForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (!state.accessCodeEnabled) {
+    showToast('Access-code login is disabled.');
+    return;
+  }
   const accessCode = authInput?.value.trim();
   if (!accessCode) {
     showToast('Enter the beta access code.');
@@ -1081,6 +1228,8 @@ authForm?.addEventListener('submit', async (event) => {
     updateAuthUi();
     closeAuthPanel();
     showToast('Hosted workspace unlocked.');
+    await refreshHostedSession();
+    await refreshQuotaProfile(true);
     await loadForgeApps(true).catch(() => {});
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

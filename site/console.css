@@ -222,6 +222,7 @@ button {
 }
 
 .session-card,
+.quota-card,
 .dock-card,
 .receipt-mini,
 .surface-shell,
@@ -245,7 +246,17 @@ button {
   padding: 13px;
 }
 
-.bridge-card-top {
+.quota-card {
+  display: grid;
+  gap: 11px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 10px;
+  padding: 13px;
+}
+
+.bridge-card-top,
+.quota-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -254,6 +265,7 @@ button {
 }
 
 .session-card span,
+.quota-card span,
 .dock-card span,
 .receipt-mini span,
 .surface-header span,
@@ -266,11 +278,14 @@ button {
 }
 
 .session-card strong,
-.session-card small {
+.session-card small,
+.quota-card strong,
+.quota-card small {
   display: block;
 }
 
-.session-card strong {
+.session-card strong,
+.quota-card-top strong {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -278,7 +293,8 @@ button {
   font-size: 13px;
 }
 
-.session-card strong::before {
+.session-card strong::before,
+.quota-card-top strong::before {
   content: "";
   width: 7px;
   height: 7px;
@@ -287,17 +303,72 @@ button {
   box-shadow: 0 0 14px rgba(125, 233, 240, 0.55);
 }
 
-.session-card small {
+.session-card small,
+.quota-card small {
   display: block;
   max-width: 100%;
   min-width: 0;
-  margin-top: 10px;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+.session-card small {
+  margin-top: 10px;
+}
+
+.quota-meter {
+  height: 7px;
+  overflow: hidden;
+  border: 1px solid rgba(125, 233, 240, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.quota-meter i {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(125, 233, 240, 0.95), rgba(111, 239, 163, 0.92));
+  transition: width 180ms ease;
+}
+
+.quota-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quota-grid div {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.quota-grid span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.quota-grid strong {
+  display: block;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workspace {
@@ -1343,6 +1414,10 @@ button {
   place-items: center;
   margin: 2px 0 16px;
   color: var(--dim);
+}
+
+[data-access-code-section][hidden] {
+  display: none;
 }
 
 .auth-divider::before {
