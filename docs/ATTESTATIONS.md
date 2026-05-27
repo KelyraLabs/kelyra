@@ -63,6 +63,7 @@ When `receiptChain` is enabled in `.kelyra/policy.json`, newly created receipts 
 
 ```bash
 kelyra proof export latest
+kelyra proof share latest
 ```
 
-Proof bundles combine receipt data, signature status, chain status, project policy, agent manifest, and git diff metadata into one portable JSON artifact.
+Proof bundles combine receipt data, signature status, chain status, project policy, agent manifest, and git diff metadata into one portable JSON artifact. `proof share` also writes a static HTML review page next to the JSON bundle.

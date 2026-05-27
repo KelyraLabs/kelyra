@@ -33,7 +33,7 @@ Protocol tools do not need a model key:
 ```bash
 kelyra swd apply --stdin --json
 kelyra receipts verify latest
-kelyra proof show latest
+kelyra proof share latest
 kelyra verify --ci
 ```
 
@@ -53,6 +53,7 @@ kelyra providers check
 
 ```bash
 kelyra init
+kelyra doctor
 kelyra providers check
 kelyra chat
 ```
@@ -67,6 +68,7 @@ Scaffold CI and team policy:
 
 ```bash
 kelyra setup-ci --policy-template team
+kelyra ci explain
 kelyra verify --ci
 ```
 
@@ -76,6 +78,15 @@ Generate, sign, and export proof:
 kelyra receipts keygen
 kelyra receipts sign latest
 kelyra proof export latest
+kelyra proof share latest
+```
+
+Publish a local receipt to a hosted Kelyra API that you operate:
+
+```bash
+export KELYRA_API_URL="https://kelyra.example"
+export KELYRA_API_SECRET="..."
+kelyra receipts publish latest
 ```
 
 ## Core Commands
@@ -83,14 +94,17 @@ kelyra proof export latest
 | Command | Purpose |
 | --- | --- |
 | `kelyra init` | Scaffold `.kelyraignore`, `MEMORY.md`, and project skill directories |
+| `kelyra doctor` | Check local setup, providers, receipts, CI, policy, and hosted API readiness |
 | `kelyra providers check` | Show whether protocol tools and chat/run are ready |
+| `kelyra ci explain` | Explain why the current diff would pass or fail Kelyra CI |
 | `kelyra chat` | Interactive model session with SWD verification |
 | `kelyra run` | One-shot model task with the same verification pipeline |
 | `kelyra swd apply` | Model-free external-agent file action verification |
-| `kelyra receipts` | List, inspect, verify, sign, and chain SWD receipts |
+| `kelyra receipts` | List, inspect, verify, sign, publish, and chain SWD receipts |
 | `kelyra policy` | Validate and scaffold project policy templates |
-| `kelyra proof` | Export or inspect portable proof bundles |
+| `kelyra proof` | Export, inspect, or create static share pages for portable proof bundles |
 | `kelyra manifest` | Manage external-agent identity metadata |
+| `kelyra migrate` | Import compatible SWD router artifacts into `.kelyra/` |
 | `kelyra setup-ci` | Scaffold GitHub Actions verification |
 | `kelyra verify --ci` | Read-only PR/diff verification without a model key |
 | `kelyra mcp` | Expose SWD and proof tools over MCP stdio |

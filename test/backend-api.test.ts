@@ -311,6 +311,62 @@ describe('Kelyra hosted API', () => {
     }
   });
 
+  it('imports CLI receipts through machine auth and exposes them to access-code history', async () => {
+    const api = await startApi();
+    try {
+      const receipt = {
+        id: 'swd-20260527000000-imported',
+        version: 1,
+        timestamp: '2026-05-27T00:00:00.000Z',
+        request: 'publish local receipt',
+        summary: 'Imported local proof receipt',
+        fileCount: 0,
+        files: [],
+        swd: {
+          success: true,
+          rolledBack: false,
+          errors: [],
+          rollbackErrors: [],
+        },
+        integrity: {
+          sha256: 'abc123',
+        },
+      };
+
+      const denied = await fetch(`${api.baseUrl}/api/receipts/import`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ receipt }),
+      });
+      assert.equal(denied.status, 401);
+
+      const imported = await fetch(`${api.baseUrl}/api/receipts/import`, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-kelyra-api-secret-with-enough-length',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ receipt }),
+      });
+      const importedBody = await imported.json();
+      assert.equal(imported.status, 201);
+      assert.equal(importedBody.ok, true);
+      assert.equal(importedBody.receiptId, receipt.id);
+      assert.equal(importedBody.ownerSub, 'access-code');
+      assert.equal(importedBody.receipt.importSource, 'kelyra-cli');
+
+      const cookie = await login(api.baseUrl);
+      const listed = await fetch(`${api.baseUrl}/api/receipts`, {
+        headers: { cookie },
+      });
+      const listedBody = await listed.json();
+      assert.equal(listed.status, 200);
+      assert.equal(listedBody.receipts[0].id, receipt.id);
+    } finally {
+      await api.close();
+    }
+  });
+
   it('assigns wallet tiers from token-holder balance metadata', async () => {
     const api = await startApi({
       env: {

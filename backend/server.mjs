@@ -1756,6 +1756,46 @@ function requireSession(config, req, res) {
   return session;
 }
 
+function requireMachineSession(config, req, res) {
+  const authorization = String(req.headers.authorization || '');
+  const token = authorization.startsWith('Bearer ') ? authorization.slice('Bearer '.length).trim() : '';
+  if (!token || !safeEqual(token, config.apiSecret)) {
+    json(config, req, res, 401, { ok: false, error: 'MACHINE_AUTH_REQUIRED' });
+    return null;
+  }
+  return {
+    sub: 'access-code',
+    authMode: 'api-secret',
+    tierId: config.tierConfig.accessCodeTierId || config.tierConfig.defaultTierId,
+    quotaMode: 'full',
+  };
+}
+
+function importedReceipt(body, fallbackOwnerSub) {
+  const receipt = body?.receipt;
+  if (!receipt || typeof receipt !== 'object') {
+    throw Object.assign(new Error('RECEIPT_REQUIRED'), { status: 400 });
+  }
+  if (typeof receipt.id !== 'string' || !/^swd-[a-zA-Z0-9_-]+$/.test(receipt.id)) {
+    throw Object.assign(new Error('RECEIPT_ID_INVALID'), { status: 400 });
+  }
+  if (receipt.version !== 1) {
+    throw Object.assign(new Error('RECEIPT_VERSION_UNSUPPORTED'), { status: 400 });
+  }
+  if (!Array.isArray(receipt.files)) {
+    throw Object.assign(new Error('RECEIPT_FILES_INVALID'), { status: 400 });
+  }
+  const ownerSub = typeof body.ownerSub === 'string' && body.ownerSub.trim()
+    ? body.ownerSub.trim().slice(0, 120)
+    : fallbackOwnerSub;
+  return {
+    ...receipt,
+    ownerSub,
+    importedAt: new Date().toISOString(),
+    importSource: 'kelyra-cli',
+  };
+}
+
 function safeLimit(value, fallback = 50, max = 100) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return fallback;
@@ -2739,6 +2779,21 @@ export function createKelyraApiServer(options = {}) {
         json(config, req, res, 200, {
           ok: true,
           receipts: await store.listReceipts(50, session.sub),
+        });
+        return;
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/receipts/import') {
+        const session = requireMachineSession(config, req, res);
+        if (!session) return;
+        const body = await readJsonBody(req);
+        const receipt = importedReceipt(body, session.sub);
+        await store.createReceipt(receipt);
+        json(config, req, res, 201, {
+          ok: true,
+          receiptId: receipt.id,
+          ownerSub: receipt.ownerSub,
+          receipt,
         });
         return;
       }

@@ -143,6 +143,7 @@ KELYRA_SMOKE_BASE_URL=http://127.0.0.1:4350 npm run backend:smoke
 - `GET /api/proof/jobs`
 - `GET /api/proof/jobs/:id`
 - `GET /api/receipts`
+- `POST /api/receipts/import` with `Authorization: Bearer $KELYRA_API_SECRET`
 - `GET /api/apps`
 - `POST /api/apps/build`
 - `GET /api/apps/:slug`

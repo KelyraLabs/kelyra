@@ -36,6 +36,9 @@ import { manifestCommand } from './commands/manifest.js';
 import { viewerCommand } from './commands/viewer.js';
 import { setupCICommand } from './commands/setup-ci.js';
 import { consoleCommand } from './commands/console.js';
+import { doctorCommand } from './commands/doctor.js';
+import { ciCommand } from './commands/ci.js';
+import { migrateCommand } from './commands/migrate.js';
 import {
   DEFAULT_MAX_TOKENS_PER_SESSION,
   DEFAULT_MAX_TURNS,
@@ -279,16 +282,35 @@ program
   .option('--json', 'Print machine-readable provider readiness when used with check')
   .action(providersCommand);
 
+program
+  .command('doctor')
+  .description('Run a complete Kelyra workspace, CI, provider, receipt, and hosted API readiness check')
+  .option('--json', 'Print machine-readable readiness output')
+  .option('--api-url <url>', 'Hosted Kelyra API URL to check')
+  .action(doctorCommand);
+
+program
+  .command('ci')
+  .description('Explain or run Kelyra CI verification for the current diff')
+  .argument('[action]', 'explain | verify', 'explain')
+  .option('--strict', 'Fail on warnings as well as high-severity findings')
+  .option('--json', 'Print machine-readable CI report')
+  .option('--base <ref>', 'Compare against a specific base ref')
+  .action(ciCommand);
+
 // SWD receipt inspection and drift verification
 program
   .command('receipts')
-  .description('List, inspect, and verify SWD trust receipts')
-  .argument('[action]', 'list | show | verify | latest | chain | keygen | sign')
+  .description('List, inspect, verify, sign, publish, and chain SWD trust receipts')
+  .argument('[action]', 'list | show | verify | latest | chain | keygen | sign | publish')
   .argument('[target]', 'receipt id, latest, or key path for keygen')
   .option('-n, --limit <n>', 'Number of receipts to show when listing', '10')
   .option('--json', 'Print machine-readable JSON')
   .option('--key <path>', 'Private Ed25519 key for signing receipts')
   .option('--force', 'Overwrite an existing receipt signing key when used with keygen')
+  .option('--api-url <url>', 'Hosted Kelyra API URL for receipts publish')
+  .option('--secret <token>', 'Machine secret for receipts publish; defaults to KELYRA_API_SECRET')
+  .option('--dry-run', 'Preview receipts publish without sending data')
   .action(receiptsCommand);
 
 // Project policy inspection and scaffolding
@@ -313,11 +335,21 @@ program
 program
   .command('proof')
   .description('Create and inspect portable SWD proof bundles')
-  .argument('[action]', 'export | show')
+  .argument('[action]', 'export | share | show')
   .argument('[target]', 'receipt id or latest')
   .option('--json', 'Print machine-readable JSON')
   .option('--out <dir>', 'Directory for exported proof bundle')
   .action(proofCommand);
+
+program
+  .command('migrate')
+  .description('Import compatible SWD router artifacts into this Kelyra project')
+  .argument('[action]', 'import', 'import')
+  .option('--source-dir <path>', 'Compatible router artifact directory to import from')
+  .option('--dry-run', 'Preview migrated files without writing them')
+  .option('--force', 'Overwrite existing Kelyra files')
+  .option('--json', 'Print machine-readable migration output')
+  .action(migrateCommand);
 
 program
   .command('manifest')

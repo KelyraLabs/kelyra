@@ -86,6 +86,12 @@ Export a portable proof bundle:
 kelyra proof export latest
 ```
 
+Create a self-contained HTML proof page for review:
+
+```bash
+kelyra proof share latest
+```
+
 The bundle includes:
 
 - receipt payload
@@ -99,6 +105,39 @@ Inspect without writing:
 ```bash
 kelyra proof show latest
 ```
+
+## Operator Diagnostics
+
+Run a full local readiness check:
+
+```bash
+kelyra doctor
+```
+
+The doctor checks git state, policy, agent manifest, receipt chain, provider keys,
+CI workflow, and hosted API health when `KELYRA_API_URL` or `--api-url` is set.
+
+Explain CI before pushing:
+
+```bash
+kelyra ci explain
+```
+
+`ci explain` uses the same engine as `verify --ci`, but renders why the current
+diff passes or fails and what reviewers should fix first.
+
+## Hosted Receipt Publishing
+
+Operators can publish a local receipt to a hosted Kelyra API they control:
+
+```bash
+export KELYRA_API_URL="https://kelyra.example"
+export KELYRA_API_SECRET="..."
+kelyra receipts publish latest
+```
+
+The hosted import endpoint requires machine authentication with
+`KELYRA_API_SECRET`; unauthenticated receipt uploads are rejected.
 
 ## Agent Manifest
 

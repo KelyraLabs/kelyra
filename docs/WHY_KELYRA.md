@@ -13,6 +13,10 @@ Kelyra is not only a prompt runner. Its core value is the verification layer aro
 - Ed25519 receipt signatures
 - policy-as-code
 - proof bundles
+- static proof share pages
+- hosted receipt publishing
+- setup diagnostics
+- CI failure explanations
 - no-model CI verification
 - MCP tools for external agent clients
 
@@ -23,11 +27,14 @@ Kelyra is not only a prompt runner. Its core value is the verification layer aro
 - Signed receipts should identify trusted local signing keys.
 - External agents should share a single verification boundary.
 - Reviewers need a portable proof bundle instead of terminal logs.
+- Operators need a single command that checks local, CI, provider, and hosted readiness.
+- A local proof should be publishable to the hosted console history when the operator owns the backend.
 
 ## Core Contract
 
 - `chat` and `run` need at least one configured model provider key.
 - `swd apply`, receipts, policy, proof, viewer, and CI verification do not need a model key.
+- `doctor`, `ci explain`, `proof share`, and `receipts publish` turn local proof artifacts into an operator workflow.
 - Kelyra-owned project state lives under `.kelyra/`.
 - User-global state lives under `~/.kelyra/`.
 
@@ -35,11 +42,13 @@ Kelyra is not only a prompt runner. Its core value is the verification layer aro
 
 ```bash
 kelyra setup-ci --policy-template team
+kelyra doctor
 kelyra swd apply --file actions.json --json
 kelyra receipts keygen
 kelyra receipts sign latest
-kelyra proof export latest
+kelyra proof share latest
+kelyra ci explain
 kelyra verify --ci
 ```
 
-That is the product difference: any compatible agent can produce file actions, and the repository can verify, sign, export, and enforce the evidence.
+That is the product difference: any compatible agent can produce file actions, and the repository can verify, sign, share, publish, explain, and enforce the evidence.

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execSync, execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { mkdtempSync, existsSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, existsSync, rmSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createSWDReceipt, saveSWDReceipt } from '../src/receipts.js';
 import type { SWDRunResult } from '../src/swd.js';
@@ -31,9 +31,12 @@ describe('CLI Smoke Tests', () => {
       assert.ok(output.includes('run [options]'));
       assert.ok(output.includes('swd [options]'));
       assert.ok(output.includes('mcp'));
+      assert.ok(output.includes('doctor [options]'));
+      assert.ok(output.includes('ci [options]'));
       assert.ok(output.includes('policy [options]'));
       assert.ok(output.includes('proof [options]'));
       assert.ok(output.includes('manifest [options]'));
+      assert.ok(output.includes('migrate [options]'));
       assert.ok(output.includes('console [options]'));
       assert.ok(output.includes('viewer [options]'));
       assert.ok(output.includes('setup-ci [options]'));
@@ -49,7 +52,7 @@ describe('CLI Smoke Tests', () => {
 
   it('runs protocol command help screens on the built CLI', () => {
     const cliPath = join(process.cwd(), 'dist', 'cli.js');
-    for (const command of ['policy', 'proof', 'manifest', 'viewer', 'receipts']) {
+    for (const command of ['policy', 'proof', 'manifest', 'viewer', 'receipts', 'doctor', 'ci', 'migrate']) {
       const output = execFileSync(process.execPath, [cliPath, command, '--help'], {
         encoding: 'utf-8',
       });
@@ -362,6 +365,56 @@ describe('CLI Smoke Tests', () => {
     }
   });
 
+  it('runs doctor readiness checks in JSON mode', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kelyra-doctor-'));
+    const cliPath = join(process.cwd(), 'dist', 'cli.js');
+
+    try {
+      const output = execFileSync(
+        process.execPath,
+        [cliPath, 'doctor', '--json'],
+        { cwd: tempDir, encoding: 'utf-8' },
+      );
+      const report = JSON.parse(output);
+      assert.equal(report.ok, true);
+      assert.equal(report.status, 'warn');
+      assert.ok(report.checks.some((check: any) => check.id === 'hosted-api'));
+      assert.ok(report.checks.some((check: any) => check.id === 'providers'));
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('imports compatible router artifacts into .kelyra', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kelyra-migrate-'));
+    const cliPath = join(process.cwd(), 'dist', 'cli.js');
+    const sourceDir = join(tempDir, 'legacy-router');
+
+    try {
+      mkdirSync(join(sourceDir, 'receipts'), { recursive: true });
+      writeFileSync(join(sourceDir, 'policy.json'), '{"version":1}\n', 'utf-8');
+      writeFileSync(join(sourceDir, 'receipts', 'sample.json'), '{"id":"swd-test"}\n', 'utf-8');
+
+      const dryRun = JSON.parse(execFileSync(
+        process.execPath,
+        [cliPath, 'migrate', 'import', '--source-dir', sourceDir, '--dry-run', '--json'],
+        { cwd: tempDir, encoding: 'utf-8' },
+      ));
+      assert.equal(dryRun.ok, true);
+      assert.ok(dryRun.actions.every((action: any) => action.status === 'planned'));
+
+      execFileSync(
+        process.execPath,
+        [cliPath, 'migrate', 'import', '--source-dir', sourceDir],
+        { cwd: tempDir, encoding: 'utf-8' },
+      );
+      assert.equal(existsSync(join(tempDir, '.kelyra', 'policy.json')), true);
+      assert.equal(existsSync(join(tempDir, '.kelyra', 'receipts', 'sample.json')), true);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('runs receipts list, show, and verify on the built CLI', () => {
     const repoRoot = process.cwd();
     const tempDir = mkdtempSync(join(tmpdir(), 'kelyra-receipts-cli-'));
@@ -442,6 +495,35 @@ describe('CLI Smoke Tests', () => {
       assert.equal(verified.ok, true);
       assert.equal(verified.integrityOk, true);
       assert.equal(verified.files[0].status, 'ok');
+
+      const shared = JSON.parse(execFileSync(
+        process.execPath,
+        [cliPath, 'proof', 'share', receipt.id, '--json'],
+        { cwd: tempDir, encoding: 'utf-8' },
+      ));
+      assert.equal(shared.ok, true);
+      assert.equal(shared.receiptId, receipt.id);
+      assert.equal(existsSync(shared.htmlPath), true);
+
+      const publishedDryRun = JSON.parse(execFileSync(
+        process.execPath,
+        [
+          cliPath,
+          'receipts',
+          'publish',
+          receipt.id,
+          '--api-url',
+          'http://127.0.0.1:9999',
+          '--secret',
+          'test-kelyra-api-secret-with-enough-length',
+          '--dry-run',
+          '--json',
+        ],
+        { cwd: tempDir, encoding: 'utf-8' },
+      ));
+      assert.equal(publishedDryRun.ok, true);
+      assert.equal(publishedDryRun.dryRun, true);
+      assert.equal(publishedDryRun.receiptId, receipt.id);
 
       writeFileSync(absPath, 'changed', 'utf-8');
       const drifted = JSON.parse(execFileSync(
