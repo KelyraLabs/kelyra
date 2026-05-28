@@ -90,7 +90,7 @@ function isWatchOnly() {
 }
 
 function watchOnlyMessage() {
-  return 'Kelyra Console is watch-only for launch. Token-holder access opens after the KELYRA token gate is enabled.';
+  return 'Kelyra Console is in preview. Active hosted actions are disabled; use the CLI for live proof work.';
 }
 
 function showToast(message) {
@@ -114,16 +114,16 @@ function applyConsoleModeUi() {
   document.body.classList.toggle('is-watch-only', watchOnly);
   if (betaStripText) {
     betaStripText.textContent = watchOnly
-      ? 'Kelyra Console · watch-only launch preview'
+      ? 'Kelyra Console Preview'
       : 'Kelyra Console · source-backed runtime';
   }
   if (workspaceStatus) {
-    workspaceStatus.textContent = watchOnly ? 'Launch preview locked' : 'SWD boundary ready';
+    workspaceStatus.textContent = watchOnly ? 'Preview mode' : 'SWD boundary ready';
   }
   if (promptInput) {
     promptInput.disabled = watchOnly;
     promptInput.placeholder = watchOnly
-      ? 'Watch-only launch preview. Holder console opens later.'
+      ? 'Preview mode. Run live proof work from the CLI.'
       : 'Analyze a token, scan Base Pulse, or create proof...';
   }
   for (const control of [
@@ -172,7 +172,7 @@ function renderQuotaProfile(profile) {
   if (quotaTier) quotaTier.textContent = profile?.tier?.name || 'Public';
   if (quotaMode) {
     if (isWatchOnly()) {
-      quotaMode.textContent = 'Watch-only launch preview';
+      quotaMode.textContent = 'Preview mode';
     } else {
       const mode = profile?.quotaMode === 'fresh' ? 'Fresh quota' : 'Full quota';
       quotaMode.textContent = profile?.authenticated ? `${mode} · signed in` : `${mode} · public`;
@@ -209,7 +209,7 @@ function updateAuthPanelUi() {
   if (accessCodeSection) accessCodeSection.hidden = isWatchOnly() || !state.accessCodeEnabled;
   if (authCopy) {
     if (isWatchOnly()) {
-      authCopy.textContent = 'The public console is currently watch-only. Wallet unlock will open after token-holder access is enabled.';
+      authCopy.textContent = 'Wallet login is not active in this public preview. The preview does not request signatures or wallet permissions.';
     } else if (state.tokenGateRequired) {
       authCopy.textContent = state.tokenMinimumLabel
         ? `Connect a wallet holding at least ${state.tokenMinimumLabel}.`
@@ -227,7 +227,7 @@ function updateAuthPanelUi() {
 function updateAuthUi() {
   if (!connectButton) return;
   if (isWatchOnly()) {
-    connectButton.textContent = 'Holder access soon';
+    connectButton.textContent = 'Preview mode';
     connectButton.classList.remove('is-authenticated');
     connectButton.disabled = true;
     if (logoutButton) logoutButton.hidden = true;
@@ -272,10 +272,10 @@ function renderRuntimeGrid() {
       ? 'Resolving'
       : 'No hosted quota';
   const cards = [
-    ['Mode', isWatchOnly() ? 'Watch-only launch' : 'Active', isWatchOnly() ? 'Hosted actions are locked until holder access opens' : 'Interactive routes are enabled'],
+    ['Mode', isWatchOnly() ? 'Preview' : 'Active', isWatchOnly() ? 'Hosted actions are disabled in this public preview' : 'Interactive routes are enabled'],
     ['Runtime', runtime, state.health?.runnerMode || state.health?.runtime || 'No runner detected'],
     ['Auth', auth, state.accessCodeEnabled ? 'Access code fallback enabled' : 'Wallet flow only'],
-    ['Gate', gate, isWatchOnly() ? 'Token-holder console activates after launch' : state.tokenGateRequired ? 'Wallet balance is enforced' : 'Token gate will be enabled last'],
+    ['Gate', gate, isWatchOnly() ? 'Wallet-gated access is inactive in preview' : state.tokenGateRequired ? 'Wallet balance is enforced' : 'Token gate will be enabled last'],
     ['Quota', quota, state.quotaProfile?.window?.resetAt ? resetLabel(state.quotaProfile.window.resetAt) : 'UTC daily window'],
     ['Store', state.health?.store || (state.bridgeOnline ? 'local files' : 'unknown'), state.health?.environment || state.health?.workspace || 'No environment report'],
     ['Worker', state.health?.features?.hostedWorker ? 'Hosted worker' : state.health?.runnerMode || 'Not connected', state.health?.features?.proofJobs ? 'Proof jobs available' : 'Proof jobs unavailable'],
@@ -700,7 +700,7 @@ async function refreshHostedHistory(silent = true) {
   if (!state.hostedOnline) return null;
   if (!state.authenticated) {
     renderHostedHistory([], [], isWatchOnly()
-      ? 'Hosted receipt history opens with token-holder access. CLI receipts can still be shared separately.'
+      ? 'Hosted receipt history is disabled in this preview. CLI receipts can still be shared separately.'
       : 'Sign in to read hosted receipts and proof jobs.');
     return null;
   }
@@ -876,7 +876,7 @@ function renderForgeApps(apps) {
     const empty = document.createElement('p');
     empty.className = 'empty-state';
     empty.textContent = isWatchOnly()
-      ? 'Forge is visible as a product preview. Building and hosted draft libraries open with token-holder access.'
+      ? 'Forge draft libraries appear here in active mode.'
       : state.hostedOnline && !state.bridgeOnline
       ? 'No hosted Forge drafts yet. Sign in and build one above to start a preview workspace.'
       : 'No local Forge drafts yet. Build one above to start a preview workspace.';
@@ -1062,18 +1062,18 @@ function setHostedOnline(health) {
   updateAuthUi();
   if (bridgeStatus) bridgeStatus.textContent = 'Hosted API';
   if (bridgeDetail) bridgeDetail.textContent = isWatchOnly()
-    ? 'Watch-only launch preview'
+    ? 'Hosted preview'
     : health.environment === 'production' ? 'Production backend' : 'Hosted backend online';
   if (proofState) proofState.textContent = isWatchOnly() ? 'Preview only' : 'Auth required';
   if (proofDetail) proofDetail.textContent = isWatchOnly()
-    ? 'Public hosted actions are locked until token-holder access opens.'
+    ? 'Hosted proof execution is disabled in this preview.'
     : 'Hosted proof jobs require a signed-in session and an isolated runner.';
-  setModelUnavailable(isWatchOnly() ? 'Hosted model actions are locked during launch preview.' : 'Hosted model access requires sign-in.');
+  setModelUnavailable(isWatchOnly() ? 'Hosted model actions are disabled in this public preview.' : 'Hosted model access requires sign-in.');
   if (historyBridge) historyBridge.textContent = 'hosted';
   if (receiptCount) receiptCount.textContent = '0';
   if (latestReceipt) latestReceipt.textContent = isWatchOnly() ? 'preview' : 'auth required';
   const hostedMessage = isWatchOnly()
-    ? 'Hosted receipt history opens with token-holder access. CLI receipts can still be shared separately.'
+    ? 'Hosted receipt history is disabled in this preview. CLI receipts can still be shared separately.'
     : 'Sign in to read hosted receipts and proof jobs.';
   if (historyEmpty) historyEmpty.textContent = hostedMessage;
   renderReceipts([], hostedMessage);
@@ -1256,7 +1256,7 @@ async function runAgentPreview(prompt) {
 
 async function loadPulse(silent = false) {
   if (blockWatchOnly()) {
-    if (pulseSummary) pulseSummary.textContent = 'Pulse is paused for the public watch-only launch preview.';
+    if (pulseSummary) pulseSummary.textContent = 'Pulse refresh is disabled in this public preview.';
     return null;
   }
   if (pulseSummary) pulseSummary.textContent = 'Loading Base signal lanes from source data...';
@@ -1279,7 +1279,7 @@ async function loadPulse(silent = false) {
 
 async function runPulseChat() {
   if (blockWatchOnly()) {
-    addMessage('agent', 'Kelyra', 'Pulse is paused in the public watch-only preview. Token-holder access opens later.');
+    addMessage('agent', 'Kelyra', 'Pulse refresh is disabled in this public preview. Use the CLI for live proof work.');
     return;
   }
   const pending = addMessage('agent', 'Kelyra', 'Loading Pulse lanes from source-backed Base DEX data...');
@@ -1317,7 +1317,7 @@ function oracleSummary(payload) {
 
 async function runOracle(prompt) {
   if (blockWatchOnly()) {
-    addMessage('agent', 'Kelyra', 'Oracle actions are paused in the public watch-only preview. Token-holder access opens later.');
+    addMessage('agent', 'Kelyra', 'Oracle actions are disabled in this public preview. Use the CLI for live proof work.');
     return;
   }
   const pending = addMessage('agent', 'Kelyra', 'Resolving Base token data from public sources...');
@@ -1347,7 +1347,7 @@ async function runOracle(prompt) {
 async function runForgeBuild(prompt) {
   if (blockWatchOnly()) {
     if (forgeOutput) {
-      forgeOutput.innerHTML = '<span>Forge result</span><strong>Watch-only preview</strong><p>Hosted app builds open after token-holder access is enabled.</p>';
+      forgeOutput.innerHTML = '<span>Forge result</span><strong>Preview mode</strong><p>Hosted app builds are disabled in this public preview.</p>';
     }
     return;
   }
@@ -1512,7 +1512,7 @@ async function deleteSelectedForgeApp() {
 async function runLocalProof(prompt) {
   if (!state.bridgeOnline) {
     if (blockWatchOnly()) {
-      addMessage('agent', 'Kelyra', 'Proof jobs are paused in the public watch-only preview. The CLI can still create local receipts.');
+      addMessage('agent', 'Kelyra', 'Hosted proof jobs are disabled in this public preview. The CLI can still create local receipts.');
       return;
     }
     if (state.hostedOnline) {
