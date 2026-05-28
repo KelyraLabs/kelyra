@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-28
+
+### Added
+
+- `kelyra mcp config [generic|claude|cursor] --json` for paste-ready MCP client configuration.
+- `kelyra receipts show latest --markdown` and `--pr` for PR-ready SWD receipt summaries.
+- `kelyra init` now scaffolds `.kelyra/policy.json` and `.kelyra/agent-manifest.json` in addition to memory, ignore, and skills files.
+- `kelyra init --policy-template <default|team|strict>` to choose the initial policy profile.
+
+### Changed
+
+- Onboarding now aligns with `kelyra doctor`, so a freshly initialized project has policy and manifest readiness files.
+- README and protocol docs now include MCP config and receipt markdown workflows.
+
 ## [0.1.1] - 2026-05-28
 
 ### Added

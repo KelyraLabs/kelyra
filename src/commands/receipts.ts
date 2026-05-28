@@ -25,6 +25,8 @@ import { c, error, heading, hr, info, success, theme, warn } from '../utils.js';
 interface ReceiptsOptions {
   limit?: string;
   json?: boolean;
+  markdown?: boolean;
+  pr?: boolean;
   key?: string;
   force?: boolean;
   apiUrl?: string;
@@ -45,12 +47,12 @@ export async function receiptsCommand(
   }
 
   if (normalizedAction === 'latest') {
-    printReceipt('latest', options.json);
+    printReceipt('latest', options);
     return;
   }
 
   if (normalizedAction === 'show') {
-    printReceipt(target ?? 'latest', options.json);
+    printReceipt(target ?? 'latest', options);
     return;
   }
 
@@ -80,7 +82,7 @@ export async function receiptsCommand(
   }
 
   warn(`Unknown receipts action: ${normalizedAction}`);
-  info('Usage: kelyra receipts | kelyra receipts show latest | kelyra receipts verify latest | kelyra receipts chain | kelyra receipts keygen | kelyra receipts sign latest | kelyra receipts publish latest');
+  info('Usage: kelyra receipts | kelyra receipts show latest --markdown | kelyra receipts verify latest | kelyra receipts chain | kelyra receipts keygen | kelyra receipts sign latest | kelyra receipts publish latest');
 }
 
 function printReceiptList(limit: number, asJson?: boolean): void {
@@ -112,15 +114,20 @@ function printReceiptList(limit: number, asJson?: boolean): void {
   }
 }
 
-function printReceipt(target: string, asJson?: boolean): void {
+function printReceipt(target: string, options: Pick<ReceiptsOptions, 'json' | 'markdown' | 'pr'> = {}): void {
   const receipt = readReceipt(target);
   if (!receipt) {
     error(`Receipt not found: ${target}`);
     return;
   }
 
-  if (asJson) {
+  if (options.json) {
     console.log(JSON.stringify(receipt, null, 2));
+    return;
+  }
+
+  if (options.markdown || options.pr) {
+    console.log(formatReceiptMarkdown(receipt));
     return;
   }
 
@@ -138,6 +145,76 @@ function printReceipt(target: string, asJson?: boolean): void {
     console.log(`     ${c.dim}${file.detail}${c.reset}`);
     console.log(`     ${c.dim}expected: ${file.expectedSource} ${expectedHash}${c.reset}`);
   }
+}
+
+function formatReceiptMarkdown(receipt: SWDReceipt): string {
+  const provider = receipt.provider
+    ? `${receipt.provider.providerId}/${receipt.provider.modelId}`
+    : 'unknown';
+  const usage = receipt.usage
+    ? `${receipt.usage.totalTokens.toLocaleString()} tokens`
+    : 'unknown';
+  const budget = receipt.budget
+    ? `~$${receipt.budget.estimatedCostUSD.toFixed(4)}`
+    : 'unknown';
+  const status = receipt.swd.success
+    ? (receipt.swd.rolledBack ? 'rolled back' : 'verified')
+    : 'issues';
+  const skills = receipt.skills && receipt.skills.length > 0
+    ? receipt.skills.map((skill) => `${skill.id}@${skill.version}`).join(', ')
+    : 'none';
+  const test = receipt.test
+    ? `${receipt.test.command} -> ${receipt.test.status}`
+    : 'none';
+
+  const lines = [
+    '### Kelyra SWD Receipt',
+    '',
+    '| Field | Value |',
+    '|---|---|',
+    `| Receipt | \`${mdEscape(receipt.id)}\` |`,
+    `| Status | ${mdEscape(status)} |`,
+    `| Time | ${mdEscape(formatDate(receipt.timestamp))} |`,
+    `| Summary | ${mdEscape(receipt.summary)} |`,
+    `| Provider | \`${mdEscape(provider)}\` |`,
+    `| Usage | ${mdEscape(usage)} / ${mdEscape(budget)} |`,
+    `| Git | \`${mdEscape(receipt.git?.branch ?? 'none')} @ ${mdEscape(receipt.git?.commit?.slice(0, 12) ?? 'none')}\` |`,
+    `| Skills | ${mdEscape(skills)} |`,
+    `| Test | ${mdEscape(test)} |`,
+  ];
+
+  if (receipt.chain?.previousId) {
+    lines.push(`| Chain | previous \`${mdEscape(receipt.chain.previousId)}\` |`);
+  }
+  if (receipt.integrity?.signature) {
+    lines.push(`| Signer | \`${mdEscape(receipt.integrity.signature.keyId)}\` |`);
+  }
+
+  lines.push(
+    '',
+    '#### Files',
+    '',
+    '| Status | Operation | Path | Detail | Expected |',
+    '|---|---|---|---|---|',
+  );
+
+  for (const file of receipt.files) {
+    const expectedHash = file.expected?.sha256 ? file.expected.sha256.slice(0, 12) : 'none';
+    const expected = expectedHash === 'none' ? 'none' : `${file.expectedSource} ${expectedHash}`;
+    lines.push(
+      `| ${mdEscape(file.status)} | ${mdEscape(file.operation)} | \`${mdEscape(file.path)}\` | ${mdEscape(file.detail)} | ${mdEscape(expected)} |`,
+    );
+  }
+
+  lines.push(
+    '',
+    '#### Local Verification',
+    '',
+    `- Inspect: \`kelyra receipts show ${mdEscape(receipt.id)}\``,
+    `- Verify drift: \`kelyra receipts verify ${mdEscape(receipt.id)}\``,
+  );
+
+  return `${lines.join('\n')}\n`;
 }
 
 function printReceiptVerification(target: string, asJson?: boolean): void {
@@ -411,6 +488,10 @@ function formatStatus(receipt: ReceiptSummary): string {
 
 function formatDate(timestamp: string): string {
   return timestamp.replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC');
+}
+
+function mdEscape(value: string): string {
+  return value.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
 }
 
 function parseLimit(raw?: string): number {

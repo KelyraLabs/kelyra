@@ -7,6 +7,8 @@ Kelyra adds a protocol layer around SWD so AI-assisted code changes can be gover
 Create a project policy:
 
 ```bash
+kelyra init
+# or initialize policy directly
 kelyra policy init --template team
 kelyra policy check
 ```
@@ -70,6 +72,7 @@ Generate and use a signing key:
 kelyra receipts keygen
 kelyra receipts sign latest
 kelyra receipts verify latest
+kelyra receipts show latest --markdown
 ```
 
 Verify the local hash chain:
@@ -173,6 +176,14 @@ http://127.0.0.1:4327
 The viewer shows receipt status, signature status, chain status, touched files, git diff, and raw proof JSON.
 
 ## MCP Tools
+
+Print client config:
+
+```bash
+kelyra mcp config generic --json
+kelyra mcp config claude --json
+kelyra mcp config cursor --json
+```
 
 New MCP tools:
 

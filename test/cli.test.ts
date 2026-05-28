@@ -52,7 +52,7 @@ describe('CLI Smoke Tests', () => {
 
   it('runs protocol command help screens on the built CLI', () => {
     const cliPath = join(process.cwd(), 'dist', 'cli.js');
-    for (const command of ['policy', 'proof', 'manifest', 'viewer', 'receipts', 'doctor', 'ci', 'migrate']) {
+    for (const command of ['mcp', 'policy', 'proof', 'manifest', 'viewer', 'receipts', 'doctor', 'ci', 'migrate']) {
       const output = execFileSync(process.execPath, [cliPath, command, '--help'], {
         encoding: 'utf-8',
       });
@@ -246,6 +246,53 @@ describe('CLI Smoke Tests', () => {
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it('runs init in a temporary directory and scaffolds readiness files', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kelyra-init-'));
+    const cliPath = join(process.cwd(), 'dist', 'cli.js');
+
+    try {
+      const output = execFileSync(
+        process.execPath,
+        [cliPath, 'init'],
+        {
+          cwd: tempDir,
+          encoding: 'utf-8',
+        },
+      );
+
+      assert.ok(output.includes('PROJECT INITIALIZATION'));
+      assert.equal(existsSync(join(tempDir, '.kelyraignore')), true);
+      assert.equal(existsSync(join(tempDir, 'MEMORY.md')), true);
+      assert.equal(existsSync(join(tempDir, '.kelyra', 'skills')), true);
+      assert.equal(existsSync(join(tempDir, '.kelyra', 'policy.json')), true);
+      assert.equal(existsSync(join(tempDir, '.kelyra', 'agent-manifest.json')), true);
+
+      const policy = JSON.parse(readFileSync(join(tempDir, '.kelyra', 'policy.json'), 'utf-8'));
+      const manifest = JSON.parse(readFileSync(join(tempDir, '.kelyra', 'agent-manifest.json'), 'utf-8'));
+      assert.equal(policy.sandboxTestCommands, true);
+      assert.equal(manifest.id, 'kelyra-agent');
+      assert.ok(manifest.capabilities.includes('proof'));
+    } catch (err: any) {
+      assert.fail(
+        `init failed: ${err.message}\n${err.stdout ?? ''}\n${err.stderr ?? ''}`,
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('prints paste-ready MCP client config', () => {
+    const cliPath = join(process.cwd(), 'dist', 'cli.js');
+    const output = execFileSync(
+      process.execPath,
+      [cliPath, 'mcp', 'config', 'cursor', '--json'],
+      { encoding: 'utf-8' },
+    );
+    const config = JSON.parse(output);
+    assert.equal(config.mcpServers.kelyra.command, 'kelyra');
+    assert.deepEqual(config.mcpServers.kelyra.args, ['mcp']);
   });
 
   it('runs skills list and check in a temporary directory without creating project files', () => {
@@ -487,6 +534,16 @@ describe('CLI Smoke Tests', () => {
       assert.equal(shown.id, receipt.id);
       assert.equal(shown.files[0].path, filePath);
       assert.equal(shown.files[0].after.path, filePath);
+
+      const markdown = execFileSync(
+        process.execPath,
+        [cliPath, 'receipts', 'show', receipt.id, '--markdown'],
+        { cwd: tempDir, encoding: 'utf-8' },
+      );
+      assert.ok(markdown.includes('### Kelyra SWD Receipt'));
+      assert.ok(markdown.includes('| Receipt |'));
+      assert.ok(markdown.includes('`sample.txt`'));
+      assert.ok(markdown.includes(`kelyra receipts verify ${receipt.id}`));
 
       const verified = JSON.parse(execFileSync(
         process.execPath,

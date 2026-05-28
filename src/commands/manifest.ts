@@ -8,10 +8,10 @@ interface ManifestOptions {
   force?: boolean;
 }
 
-const DEFAULT_AGENT_MANIFEST = {
+export const DEFAULT_AGENT_MANIFEST = {
   id: 'kelyra-agent',
   name: 'Kelyra Agent',
-  version: '0.1.1',
+  version: '0.1.2',
   capabilities: ['read', 'patch', 'write', 'test', 'verify', 'proof'],
   signerKeyIds: [],
 };

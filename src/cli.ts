@@ -226,6 +226,10 @@ program
 program
   .command('mcp')
   .description('Run the Kelyra MCP stdio server for SWD, receipts, and skills tools')
+  .argument('[action]', 'server | config', 'server')
+  .argument('[client]', 'generic | claude | cursor')
+  .option('--json', 'Print only the MCP config JSON when used with config')
+  .option('--command <name>', 'Command the MCP client should run', 'kelyra')
   .action(mcpCommand);
 
 // ── kelyra verify ────────────────────────────────────────────
@@ -311,6 +315,8 @@ program
   .option('--api-url <url>', 'Hosted Kelyra API URL for receipts publish')
   .option('--secret <token>', 'Machine secret for receipts publish; defaults to KELYRA_API_SECRET')
   .option('--dry-run', 'Preview receipts publish without sending data')
+  .option('--markdown', 'Print a PR-ready Markdown receipt summary for show/latest')
+  .option('--pr', 'Alias for --markdown')
   .action(receiptsCommand);
 
 // Project policy inspection and scaffolding
@@ -400,6 +406,7 @@ program
   .description('Initialize Kelyra in the current project')
   .option('-f, --force', 'Re-scaffold files even if they already exist')
   .option('--check', 'Run environment and project setup checks without writing files')
+  .option('--policy-template <name>', 'Policy template for scaffolded .kelyra/policy.json: default, team, or strict', 'team')
   .action(initCommand);
 
 // ── Default: show help ───────────────────────────────────────
