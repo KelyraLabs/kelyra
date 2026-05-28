@@ -18,12 +18,13 @@ Kelyra turns agent file changes into reviewable evidence: policy checks, filesys
 
 ```bash
 npm install -g kelyra
+kelyra chat
 ```
 
-Or run directly:
+Or run without a global install:
 
 ```bash
-npx kelyra --help
+npx kelyra@latest chat
 ```
 
 ## Provider Keys
