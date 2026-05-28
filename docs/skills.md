@@ -143,6 +143,7 @@ Use:
 
 ```bash
 kelyra receipts show latest
+kelyra receipts show latest --markdown
 ```
 
 This gives reviewers a lightweight audit trail:

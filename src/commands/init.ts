@@ -2,16 +2,20 @@
 //  kelyra :: commands/init.ts
 //  Project initialization — single-command onboarding
 //
-//  Creates .kelyraignore, MEMORY.md, skills directory.
+//  Creates .kelyraignore, MEMORY.md, policy, manifest, skills directory.
 //  Validates environment, detects providers, prints next steps.
 // ─────────────────────────────────────────────────────────────
 
-import { existsSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { c, BANNER, hr, heading, success, warn, error as logError } from '../utils.js';
 import { DEFAULT_IGNORE_PATTERNS, KELYRAIGNORE_FILE, detectProviders } from '../config.js';
 import { initMemory, getMemoryPath } from '../memory.js';
 import { ensureSkillsDir, getProjectSkillsDir, listSkills } from '../skills.js';
+import { AGENT_MANIFEST_PATH } from '../agent-manifest.js';
+import { POLICY_PATH } from '../policy.js';
+import { getPolicyTemplate } from '../policy-templates.js';
+import { DEFAULT_AGENT_MANIFEST } from './manifest.js';
 
 // ── Constants ────────────────────────────────────────────────
 const MIN_NODE_MAJOR = 20;
@@ -151,6 +155,29 @@ function scaffoldSkillsDir(): ScaffoldResult {
   return { file: '.kelyra/skills/', action: existed ? 'exists' : 'created' };
 }
 
+function scaffoldPolicy(force: boolean, templateName: string | undefined): ScaffoldResult {
+  const target = resolve(process.cwd(), POLICY_PATH);
+  if (existsSync(target) && !force) {
+    return { file: POLICY_PATH, action: 'exists' };
+  }
+
+  mkdirSync(dirname(target), { recursive: true });
+  const policy = getPolicyTemplate(templateName);
+  writeFileSync(target, `${JSON.stringify(policy, null, 2)}\n`, 'utf-8');
+  return { file: POLICY_PATH, action: 'created' };
+}
+
+function scaffoldManifest(force: boolean): ScaffoldResult {
+  const target = resolve(process.cwd(), AGENT_MANIFEST_PATH);
+  if (existsSync(target) && !force) {
+    return { file: AGENT_MANIFEST_PATH, action: 'exists' };
+  }
+
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, `${JSON.stringify(DEFAULT_AGENT_MANIFEST, null, 2)}\n`, 'utf-8');
+  return { file: AGENT_MANIFEST_PATH, action: 'created' };
+}
+
 function inspectScaffoldState(): ScaffoldResult[] {
   return [
     {
@@ -164,6 +191,14 @@ function inspectScaffoldState(): ScaffoldResult[] {
     {
       file: '.kelyra/skills/',
       action: existsSync(getProjectSkillsDir()) ? 'exists' : 'missing',
+    },
+    {
+      file: POLICY_PATH,
+      action: existsSync(resolve(process.cwd(), POLICY_PATH)) ? 'exists' : 'missing',
+    },
+    {
+      file: AGENT_MANIFEST_PATH,
+      action: existsSync(resolve(process.cwd(), AGENT_MANIFEST_PATH)) ? 'exists' : 'missing',
     },
   ];
 }
@@ -181,6 +216,7 @@ function dimBadge(ok: boolean): string {
 interface InitOptions {
   force?: boolean;
   check?: boolean;
+  policyTemplate?: string;
 }
 
 export async function initCommand(options: InitOptions): Promise<void> {
@@ -248,6 +284,8 @@ export async function initCommand(options: InitOptions): Promise<void> {
       scaffoldIgnoreFile(force),
       scaffoldMemory(force),
       scaffoldSkillsDir(),
+      scaffoldPolicy(force, options.policyTemplate),
+      scaffoldManifest(force),
     ];
 
   for (const r of results) {

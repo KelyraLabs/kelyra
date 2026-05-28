@@ -94,7 +94,7 @@ kelyra receipts publish latest
 
 | Command | Purpose |
 | --- | --- |
-| `kelyra init` | Scaffold `.kelyraignore`, `MEMORY.md`, and project skill directories |
+| `kelyra init` | Scaffold `.kelyraignore`, `MEMORY.md`, project policy, agent manifest, and skill directories |
 | `kelyra doctor` | Check local setup, providers, receipts, CI, policy, and hosted API readiness |
 | `kelyra providers check` | Show whether protocol tools and chat/run are ready |
 | `kelyra ci explain` | Explain why the current diff would pass or fail Kelyra CI |
@@ -109,8 +109,21 @@ kelyra receipts publish latest
 | `kelyra setup-ci` | Scaffold GitHub Actions verification |
 | `kelyra verify --ci` | Read-only PR/diff verification without a model key |
 | `kelyra mcp` | Expose SWD and proof tools over MCP stdio |
+| `kelyra mcp config` | Print paste-ready MCP client config for generic, Claude, or Cursor clients |
 | `kelyra skills` | List, inspect, create, and validate project, global, and official skill packs |
 | `kelyra learn` | Generate a repo-local skill from deterministic project signals |
+
+PR-ready receipt summary:
+
+```bash
+kelyra receipts show latest --markdown
+```
+
+MCP client config:
+
+```bash
+kelyra mcp config cursor --json
+```
 
 ## Local Files
 
