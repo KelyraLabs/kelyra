@@ -12,6 +12,7 @@ import {
   sendMessage,
   SWDEngine,
   KELYRA_SYSTEM_PROMPT,
+  MODELS,
 } from '../dist/index.js';
 
 const siteDir = fileURLToPath(new URL('.', import.meta.url));
@@ -836,6 +837,7 @@ async function localData(req, res) {
 }
 
 function providerReport() {
+  const effort = consoleAgentEffort();
   const providers = {
     anthropic: {
       id: 'anthropic',
@@ -843,6 +845,7 @@ function providerReport() {
       envVar: 'ANTHROPIC_API_KEY',
       configured: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
       valid: !process.env.ANTHROPIC_API_KEY?.trim() || process.env.ANTHROPIC_API_KEY.trim().startsWith('sk-ant-'),
+      model: MODELS[effort] || MODELS.high,
     },
     openai: {
       id: 'openai',
@@ -850,6 +853,7 @@ function providerReport() {
       envVar: 'OPENAI_API_KEY',
       configured: Boolean(process.env.OPENAI_API_KEY?.trim()),
       valid: true,
+      model: 'gpt-4o',
     },
     deepseek: {
       id: 'deepseek',
@@ -857,14 +861,33 @@ function providerReport() {
       envVar: 'DEEPSEEK_API_KEY',
       configured: Boolean(process.env.DEEPSEEK_API_KEY?.trim()),
       valid: true,
+      model: 'deepseek-chat',
     },
   };
   const agentChatRunAvailable = Object.values(providers).some((provider) => provider.configured && provider.valid);
+  const preferredProvider = Object.values(providers).find((provider) => provider.configured && provider.valid) || null;
 
   return {
     agentChatRunAvailable,
+    consoleAgent: {
+      effort,
+      provider: preferredProvider?.id || null,
+      providerName: preferredProvider?.name || null,
+      model: preferredProvider?.model || null,
+    },
     providers,
   };
+}
+
+function consoleAgentEffort(value = process.env.KELYRA_CONSOLE_AGENT_EFFORT) {
+  const effort = String(value || '').trim().toLowerCase();
+  return ['high', 'medium', 'low'].includes(effort) ? effort : 'high';
+}
+
+function consoleAgentMaxTokens(value = process.env.KELYRA_CONSOLE_AGENT_MAX_TOKENS) {
+  const parsed = Number(value || 8192);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 8192;
+  return Math.min(16384, Math.floor(parsed));
 }
 
 async function readJsonBody(req) {
@@ -919,7 +942,7 @@ async function runAgentPreview(req, res) {
       ok: false,
       error: 'Model-backed agent is not configured in this console runtime.',
       providers,
-      nextStep: 'Set OPENAI_API_KEY or ANTHROPIC_API_KEY in the terminal that starts kelyra console, then restart it.',
+      nextStep: 'Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or DEEPSEEK_API_KEY in the terminal that starts kelyra console, then restart it.',
     });
     return;
   }
@@ -934,11 +957,13 @@ async function runAgentPreview(req, res) {
 - This endpoint performs a dry-run only. Do not claim files were changed.`;
 
   const startedAt = Date.now();
+  const effort = consoleAgentEffort(body.effort);
+  const maxTokens = consoleAgentMaxTokens(body.maxTokens);
   const response = await sendMessage(
     [{ role: 'user', content: prompt }],
-    'medium',
+    effort,
     systemPrompt,
-    4096,
+    maxTokens,
   );
   const actions = parseActions(response.text);
   const dryRun = actions.length > 0
@@ -953,6 +978,8 @@ async function runAgentPreview(req, res) {
       text: response.text,
       provider: response._orchestration?.providerId,
       model: response._orchestration?.modelId,
+      effort,
+      maxTokens,
       inputTokens: response.inputTokens,
       outputTokens: response.outputTokens,
     },
