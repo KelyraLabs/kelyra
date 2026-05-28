@@ -1013,7 +1013,7 @@ function configuredProviderNames(report) {
     .map((provider) => provider.name || provider.id);
 }
 
-function setModelUnavailable(detail = 'Set OPENAI_API_KEY or ANTHROPIC_API_KEY, then restart kelyra console.') {
+function setModelUnavailable(detail = 'Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or DEEPSEEK_API_KEY, then restart kelyra console.') {
   state.agentAvailable = false;
   if (modelState) modelState.textContent = 'Not connected';
   if (modelDetail) modelDetail.textContent = detail;
@@ -1026,11 +1026,16 @@ function updateModelStatus(report) {
     return;
   }
 
+  const preferred = report.consoleAgent || {};
   state.agentAvailable = true;
-  if (modelState) modelState.textContent = names[0];
-  if (modelDetail) modelDetail.textContent = names.length > 1
-    ? `${names.length} providers available for agent preview.`
-    : 'Model-backed agent preview is available.';
+  if (modelState) modelState.textContent = preferred.providerName || names[0];
+  if (modelDetail) {
+    const model = preferred.model ? `${preferred.model}` : 'model-backed preview';
+    const effort = preferred.effort ? `${preferred.effort} effort` : 'high effort';
+    modelDetail.textContent = names.length > 1
+      ? `${model} · ${effort} · ${names.length} providers available.`
+      : `${model} · ${effort}.`;
+  }
 }
 
 function setBridgeOffline(message = 'Run kelyra console') {
