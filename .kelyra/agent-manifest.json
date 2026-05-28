@@ -1,0 +1,14 @@
+{
+  "id": "kelyra-agent",
+  "name": "Kelyra Agent",
+  "version": "0.1.1",
+  "capabilities": [
+    "read",
+    "patch",
+    "write",
+    "test",
+    "verify",
+    "proof"
+  ],
+  "signerKeyIds": []
+}

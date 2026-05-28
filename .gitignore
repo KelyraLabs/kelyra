@@ -11,8 +11,14 @@ memory.db-journal
 memory.db-wal
 memory.db-shm
 
-# Local SWD trust receipts (may include prompts and provider metadata)
-.kelyra/
+# Project Kelyra config is versioned; local proof artifacts stay ignored.
+.kelyra/*
+!.kelyra/
+!.kelyra/.gitkeep
+!.kelyra/policy.json
+!.kelyra/agent-manifest.json
+!.kelyra/skills/
+!.kelyra/skills/.gitkeep
 .kelyra/console-runs/
 .kelyra/forge/
 .kelyra/receipts/

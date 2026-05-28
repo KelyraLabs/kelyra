@@ -9,10 +9,10 @@ interface ManifestOptions {
 }
 
 const DEFAULT_AGENT_MANIFEST = {
-  id: 'local-agent',
-  name: 'Local Agent',
-  version: '0.1.0',
-  capabilities: ['read', 'patch', 'write', 'test'],
+  id: 'kelyra-agent',
+  name: 'Kelyra Agent',
+  version: '0.1.1',
+  capabilities: ['read', 'patch', 'write', 'test', 'verify', 'proof'],
   signerKeyIds: [],
 };
 
