@@ -1,6 +1,6 @@
 {
   "name": "kelyra",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Governed agent execution with Strict Write Discipline, signed receipts, policy-as-code, and CI proof bundles",
   "type": "module",
   "bin": {

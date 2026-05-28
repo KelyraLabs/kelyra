@@ -7,10 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-28
+
 ### Added
 
 - Official bundled skills under `skills/official/` for repository work, security review, frontend polish, protocol audits, CI hardening, docs release work, external-agent proof, token launch workflows, smart contract review, and console product review.
 - Official skills are now discovered by `kelyra skills`, validated by `kelyra skills check`, and loadable by name with `-s <skill>`.
+- Clean public routes for `/console`, `/protocol`, and `/tiers`, with redirects from the legacy `.html` URLs.
+
+### Changed
+
+- Public launch copy now avoids stale holder-access and watch-only launch wording outside the console preview.
+- `kelyra doctor` now detects Kelyra CI verification in any GitHub workflow YAML.
+- Contributor docs now describe the current dependency review policy and optional provider keys.
+- The repository now ships a tracked Kelyra policy and agent manifest while keeping local proof artifacts ignored.
+- New agent manifests scaffold with Kelyra-specific identity and proof/verify capabilities.
+
+### Security
+
+- npm package dry-run includes the bundled official skills while preserving backend, site, docs, and CLI packaging.
 
 ## [0.1.0] - 2026-05-27
 
