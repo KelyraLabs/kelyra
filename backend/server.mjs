@@ -642,6 +642,154 @@ function publicForgeApp(app) {
   };
 }
 
+function isPublishedForgeApp(app) {
+  return app?.status === 'published';
+}
+
+function publicGalleryApp(app) {
+  const publicApp = publicForgeApp(app);
+  if (!publicApp) return null;
+  const { ownerSub, ...safeApp } = publicApp;
+  return {
+    ...safeApp,
+    ownerWallet: String(ownerSub || '').startsWith('wallet:') ? String(ownerSub).slice('wallet:'.length) : null,
+    publicUrl: publicApp.publicUrl || publicApp.previewUrl || `/api/apps/${publicApp.slug}/preview`,
+  };
+}
+
+function hostedDataBridgeInfo(config) {
+  return {
+    ok: true,
+    route: '/api/data',
+    method: 'POST',
+    authRequired: true,
+    consoleMode: config.consoleMode,
+    watchOnly: config.consoleMode === 'watch-only',
+    message: 'Kelyra data bridge is alive. Generated apps call this route with POST, a data type, target, params, and an authenticated wallet session.',
+    types: [
+      'pulse.lanes',
+      'pulse.risk',
+      'market.discovery',
+      'market.search',
+      'oracle.token',
+      'oracle.search',
+      'receipts.list',
+      'receipts.latest',
+      'proof.verify',
+      'workspace.context',
+    ],
+  };
+}
+
+function apiEndpoints() {
+  return {
+    health: '/api/health',
+    tiers: '/api/tiers',
+    session: '/api/auth/session',
+    walletNonce: '/api/auth/wallet/nonce',
+    walletVerify: '/api/auth/wallet/verify',
+    quota: '/api/quota/profile',
+    pulse: '/api/pulse',
+    oracle: '/api/oracle/analyze',
+    dataBridge: '/api/data',
+    receipts: '/api/receipts',
+    proofJobs: '/api/proof/jobs',
+    forgeApps: '/api/apps',
+    appGallery: '/api/apps/gallery',
+    openApi: '/openapi.json',
+    apiDocs: '/api/docs',
+  };
+}
+
+function apiIndexPayload(config) {
+  return {
+    ok: true,
+    service: 'kelyra-api',
+    environment: config.environment,
+    consoleMode: config.consoleMode,
+    endpoints: apiEndpoints(),
+    sites: {
+      landing: 'https://kelyralabs.com/',
+      console: 'https://console.kelyralabs.com/',
+      docs: 'https://docs.kelyralabs.com/',
+    },
+  };
+}
+
+function apiDocsPayload(config) {
+  return {
+    ok: true,
+    service: 'kelyra-api',
+    version: 'kelyra.api.v1',
+    openApi: '/openapi.json',
+    consoleMode: config.consoleMode,
+    auth: {
+      wallet: {
+        chainId: BASE_CHAIN_ID,
+        nonce: '/api/auth/wallet/nonce',
+        verify: '/api/auth/wallet/verify',
+        signature: 'personal_sign over a Kelyra nonce message; no transaction, approval, or spending permission.',
+      },
+      tokenGate: {
+        required: config.requireTokenHolder,
+        tokenAddress: config.tokenAddress || null,
+        symbol: config.tierConfig.token?.symbol || 'KELYRA',
+        enabledWhen: 'Set KELYRA_TOKEN_ADDRESS and KELYRA_REQUIRE_TOKEN_HOLDER=true.',
+      },
+    },
+    endpoints: apiEndpoints(),
+  };
+}
+
+function openApiSpec(config) {
+  return {
+    openapi: '3.1.0',
+    info: {
+      title: 'Kelyra API',
+      version: '1.0.0',
+      description: 'Hosted API boundary for Kelyra Console, wallet auth, quotas, proof jobs, Pulse, Oracle, data bridge, and Forge apps.',
+    },
+    servers: [
+      { url: config.publicBaseUrl || 'https://api.kelyralabs.com' },
+    ],
+    paths: {
+      '/api/health': { get: { summary: 'Service health and feature flags' } },
+      '/api/tiers': { get: { summary: 'Public token tiers, quotas, and gate configuration' } },
+      '/api/quota/profile': { get: { summary: 'Current quota profile for public or authenticated session' } },
+      '/api/auth/session': { get: { summary: 'Current hosted session' } },
+      '/api/auth/wallet/nonce': { post: { summary: 'Create a wallet login nonce for Base chain access' } },
+      '/api/auth/wallet/verify': { post: { summary: 'Verify a personal_sign wallet login signature and create a session' } },
+      '/api/auth/logout': { post: { summary: 'Clear the hosted session cookie' } },
+      '/api/pulse': { get: { summary: 'Source-backed Base Pulse lanes' } },
+      '/api/oracle/analyze': { post: { summary: 'Source-backed token, market, or wallet analysis' } },
+      '/api/data': {
+        get: { summary: 'Data bridge capability descriptor' },
+        post: { summary: 'Authenticated data bridge for generated apps and console tools' },
+      },
+      '/api/receipts': { get: { summary: 'Authenticated receipt history' } },
+      '/api/receipts/import': { post: { summary: 'Machine-authenticated CLI receipt import' } },
+      '/api/proof/jobs': {
+        get: { summary: 'Authenticated proof job list' },
+        post: { summary: 'Create an authenticated hosted proof job' },
+      },
+      '/api/proof/jobs/{id}': { get: { summary: 'Authenticated proof job detail' } },
+      '/api/apps': {
+        get: { summary: 'Authenticated owner Forge apps' },
+        post: { summary: 'Create a Forge app draft through /api/apps/build' },
+      },
+      '/api/apps/gallery': { get: { summary: 'Public published Forge app gallery' } },
+      '/api/apps/{slug}': {
+        get: { summary: 'Published app metadata or authenticated owner app detail' },
+        patch: { summary: 'Revise an authenticated owner app' },
+        delete: { summary: 'Delete an authenticated owner app' },
+      },
+      '/api/apps/{slug}/publish': { post: { summary: 'Publish an authenticated owner app' } },
+      '/api/apps/{slug}/preview': { get: { summary: 'Published app preview or authenticated owner preview' } },
+      '/api/apps/{slug}/assets/{file}': { get: { summary: 'Published app asset or authenticated owner asset' } },
+    },
+  };
+}
+
 function normalizeAddress(address) {
   const value = String(address || '').trim();
   if (!isAddress(value)) return '';
@@ -996,6 +1144,14 @@ class FileStore {
       .slice(0, limit);
   }
 
+  async listPublicForgeApps(limit = 50) {
+    const apps = await this.readJson(this.appsPath, []);
+    return apps
+      .filter(isPublishedForgeApp)
+      .sort((a, b) => String(b.publishedAt || b.updatedAt || '').localeCompare(String(a.publishedAt || a.updatedAt || '')))
+      .slice(0, limit);
+  }
+
   async getForgeApp(slug) {
     const apps = await this.readJson(this.appsPath, []);
     return apps.find((app) => app.slug === slug) || null;
@@ -1308,6 +1464,19 @@ class PostgresStore {
     const result = await pool.query(
       'SELECT data FROM forge_apps WHERE owner_sub = $1 ORDER BY updated_at DESC LIMIT $2',
       [ownerSub, limit],
+    );
+    return result.rows.map((row) => row.data);
+  }
+
+  async listPublicForgeApps(limit = 50) {
+    await this.ensureSchema();
+    const pool = await this.pool();
+    const result = await pool.query(
+      `SELECT data FROM forge_apps
+       WHERE data->>'status' = 'published'
+       ORDER BY COALESCE(data->>'publishedAt', data->>'updatedAt') DESC
+       LIMIT $1`,
+      [limit],
     );
     return result.rows.map((row) => row.data);
   }
@@ -2651,28 +2820,18 @@ export function createKelyraApiServer(options = {}) {
         return;
 	      }
 
+      if (req.method === 'GET' && url.pathname === '/openapi.json') {
+        json(config, req, res, 200, openApiSpec(config));
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/docs') {
+        json(config, req, res, 200, apiDocsPayload(config));
+        return;
+      }
+
       if (req.method === 'GET' && url.pathname === '/' && (!config.serveStatic || isApiRequestHost(config, req))) {
-        json(config, req, res, 200, {
-          ok: true,
-          service: 'kelyra-api',
-          environment: config.environment,
-          consoleMode: config.consoleMode,
-          endpoints: {
-            health: '/api/health',
-            tiers: '/api/tiers',
-            session: '/api/auth/session',
-            quota: '/api/quota/profile',
-            pulse: '/api/pulse',
-            oracle: '/api/oracle/analyze',
-            proofJobs: '/api/proof/jobs',
-            forgeApps: '/api/apps',
-          },
-          sites: {
-            landing: 'https://kelyralabs.com/',
-            console: 'https://console.kelyralabs.com/',
-            docs: 'https://docs.kelyralabs.com/',
-          },
-        });
+        json(config, req, res, 200, apiIndexPayload(config));
         return;
       }
 
@@ -2860,6 +3019,11 @@ export function createKelyraApiServer(options = {}) {
 	        return;
 	      }
 
+      if (req.method === 'GET' && url.pathname === '/api/data') {
+        json(config, req, res, 200, hostedDataBridgeInfo(config));
+        return;
+      }
+
 	      if (req.method === 'POST' && url.pathname === '/api/data') {
 	        if (!requireConsoleActive(config, req, res)) return;
 	        const session = requireSession(config, req, res);
@@ -2941,6 +3105,12 @@ export function createKelyraApiServer(options = {}) {
         return;
       }
 
+      if (req.method === 'GET' && (url.pathname === '/api/apps/gallery' || url.pathname === '/api/apps/public')) {
+        const apps = await store.listPublicForgeApps(safeLimit(url.searchParams.get('limit'), 24, 100));
+        json(config, req, res, 200, { ok: true, apps: apps.map(publicGalleryApp).filter(Boolean) });
+        return;
+      }
+
       if (req.method === 'GET' && url.pathname === '/api/apps') {
         const session = requireSession(config, req, res);
         if (!session) return;
@@ -2982,14 +3152,19 @@ export function createKelyraApiServer(options = {}) {
 
       const appMatch = url.pathname.match(/^\/api\/apps\/([^/]+)$/);
       if (req.method === 'GET' && appMatch) {
+        const app = await store.getForgeApp(appMatch[1]);
+        if (isPublishedForgeApp(app)) {
+          json(config, req, res, 200, { ok: true, app: publicGalleryApp(app) });
+          return;
+        }
         const session = requireSession(config, req, res);
         if (!session) return;
-        const app = await getOwnedApp(store, session, appMatch[1]);
-        if (!app) {
+        const ownedApp = app && app.ownerSub === session.sub ? app : null;
+        if (!ownedApp) {
           json(config, req, res, 404, { ok: false, error: 'APP_NOT_FOUND' });
           return;
         }
-        json(config, req, res, 200, { ok: true, app: publicForgeApp(app) });
+        json(config, req, res, 200, { ok: true, app: publicForgeApp(ownedApp) });
         return;
       }
 
@@ -3069,9 +3244,12 @@ export function createKelyraApiServer(options = {}) {
 
       const assetMatch = url.pathname.match(/^\/api\/apps\/([^/]+)\/assets\/([^/]+)$/);
       if (req.method === 'GET' && assetMatch) {
-        const session = requireSession(config, req, res);
-        if (!session) return;
-        const app = await getOwnedApp(store, session, assetMatch[1]);
+        let app = await store.getForgeApp(assetMatch[1]);
+        if (!isPublishedForgeApp(app)) {
+          const session = requireSession(config, req, res);
+          if (!session) return;
+          app = app && app.ownerSub === session.sub ? app : null;
+        }
         const assetName = assetMatch[2];
         const content = app?.assets?.[assetName];
         if (!app || content === undefined) {
@@ -3086,9 +3264,12 @@ export function createKelyraApiServer(options = {}) {
 
       const previewMatch = url.pathname.match(/^\/api\/apps\/([^/]+)\/preview$/);
       if (req.method === 'GET' && previewMatch) {
-        const session = requireSession(config, req, res);
-        if (!session) return;
-        const app = await getOwnedApp(store, session, previewMatch[1]);
+        let app = await store.getForgeApp(previewMatch[1]);
+        if (!isPublishedForgeApp(app)) {
+          const session = requireSession(config, req, res);
+          if (!session) return;
+          app = app && app.ownerSub === session.sub ? app : null;
+        }
         if (!app) {
           json(config, req, res, 404, { ok: false, error: 'APP_NOT_FOUND' });
           return;

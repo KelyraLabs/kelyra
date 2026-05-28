@@ -154,6 +154,34 @@ describe('Kelyra hosted API', () => {
     }
   });
 
+  it('exposes API docs, OpenAPI, and a public data bridge descriptor', async () => {
+    const api = await startApi();
+    try {
+      const docs = await fetch(`${api.baseUrl}/api/docs`);
+      const docsBody = await docs.json();
+      assert.equal(docs.status, 200);
+      assert.equal(docsBody.ok, true);
+      assert.equal(docsBody.auth.wallet.signature.includes('personal_sign'), true);
+      assert.equal(docsBody.auth.tokenGate.enabledWhen.includes('KELYRA_TOKEN_ADDRESS'), true);
+
+      const openApi = await fetch(`${api.baseUrl}/openapi.json`);
+      const openApiBody = await openApi.json();
+      assert.equal(openApi.status, 200);
+      assert.equal(openApiBody.openapi, '3.1.0');
+      assert.ok(openApiBody.paths['/api/auth/wallet/verify']);
+      assert.ok(openApiBody.paths['/api/apps/gallery']);
+
+      const bridge = await fetch(`${api.baseUrl}/api/data`);
+      const bridgeBody = await bridge.json();
+      assert.equal(bridge.status, 200);
+      assert.equal(bridgeBody.ok, true);
+      assert.equal(bridgeBody.authRequired, true);
+      assert.ok(bridgeBody.types.includes('pulse.lanes'));
+    } finally {
+      await api.close();
+    }
+  });
+
   it('enforces watch-only launch mode on hosted console actions', async () => {
     const api = await startApi({ env: { KELYRA_CONSOLE_MODE: 'watch-only' } });
     try {
@@ -834,6 +862,26 @@ describe('Kelyra hosted API', () => {
       assert.equal(publishedBody.app.status, 'published');
       assert.equal(publishedBody.app.proofStatus, 'verified');
       assert.equal(publishedBody.app.receiptId, processedRevision.receipt.id);
+
+      const gallery = await fetch(`${api.baseUrl}/api/apps/gallery`);
+      const galleryBody = await gallery.json();
+      assert.equal(gallery.status, 200);
+      assert.equal(galleryBody.ok, true);
+      assert.equal(galleryBody.apps.length, 1);
+      assert.equal(galleryBody.apps[0].slug, createdBody.app.slug);
+      assert.equal(galleryBody.apps[0].ownerSub, undefined);
+      assert.equal(galleryBody.apps[0].publicUrl.includes('/api/apps/'), true);
+
+      const publicDetail = await fetch(`${api.baseUrl}/api/apps/${createdBody.app.slug}`);
+      const publicDetailBody = await publicDetail.json();
+      assert.equal(publicDetail.status, 200);
+      assert.equal(publicDetailBody.app.slug, createdBody.app.slug);
+      assert.equal(publicDetailBody.app.ownerSub, undefined);
+
+      const publicPreview = await fetch(`${api.baseUrl}/api/apps/${createdBody.app.slug}/preview`);
+      const publicPreviewBody = await publicPreview.text();
+      assert.equal(publicPreview.status, 200);
+      assert.match(publicPreviewBody, /window\.kelyraQuery/);
 
       const deleted = await fetch(`${api.baseUrl}/api/apps/${createdBody.app.slug}`, {
         method: 'DELETE',

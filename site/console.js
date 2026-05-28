@@ -38,6 +38,7 @@ const authPanel = document.querySelector('[data-auth-panel]');
 const authForm = document.querySelector('[data-auth-form]');
 const authInput = document.querySelector('[data-access-code]');
 const authClose = document.querySelector('[data-auth-close]');
+const authTitle = document.querySelector('[data-auth-title]');
 const walletAuthButton = document.querySelector('[data-wallet-auth]');
 const authCopy = document.querySelector('[data-auth-copy]');
 const accessCodeSection = document.querySelector('[data-access-code-section]');
@@ -207,17 +208,24 @@ function renderQuotaOffline(message = 'Quota unavailable') {
 
 function updateAuthPanelUi() {
   if (accessCodeSection) accessCodeSection.hidden = isWatchOnly() || !state.accessCodeEnabled;
+  if (authTitle) {
+    authTitle.textContent = isWatchOnly()
+      ? 'Console preview'
+      : state.tokenGateRequired
+        ? 'Verify holder access'
+        : 'Connect wallet';
+  }
   if (authCopy) {
     if (isWatchOnly()) {
       authCopy.textContent = 'Wallet login is not active in this public preview. The preview does not request signatures or wallet permissions.';
     } else if (state.tokenGateRequired) {
       authCopy.textContent = state.tokenMinimumLabel
-        ? `Connect a wallet holding at least ${state.tokenMinimumLabel}.`
-        : 'Connect a wallet that meets the current token tier.';
+        ? `Connect a wallet holding at least ${state.tokenMinimumLabel}. Kelyra asks you to sign a login nonce only: no approval, no transaction, no spending permission.`
+        : 'Connect a wallet that meets the current token tier. Kelyra asks you to sign a login nonce only: no approval, no transaction, no spending permission.';
     } else if (state.accessCodeEnabled) {
-      authCopy.textContent = 'Connect a wallet, or use a beta access code while access is controlled.';
+      authCopy.textContent = 'Connect a wallet with a safe login signature, or use a beta access code while access is controlled. No approval, transaction, or spending permission is requested.';
     } else {
-      authCopy.textContent = 'Connect a wallet to open the hosted workspace.';
+      authCopy.textContent = 'Connect a wallet with a safe login signature to open the hosted workspace. No approval, transaction, or spending permission is requested.';
     }
   }
   applyConsoleModeUi();
