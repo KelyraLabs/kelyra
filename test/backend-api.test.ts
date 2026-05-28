@@ -709,6 +709,32 @@ describe('Kelyra hosted API', () => {
     }
   });
 
+  it('can run Railway as an API-only service without serving website HTML', async () => {
+    const api = await startApi({ env: { KELYRA_SERVE_STATIC: 'false' } });
+    try {
+      const health = await fetch(`${api.baseUrl}/api/health`);
+      const healthBody = await health.json();
+      assert.equal(health.status, 200);
+      assert.equal(healthBody.static, false);
+
+      const root = await fetch(`${api.baseUrl}/`);
+      const rootBody = await root.json();
+      assert.equal(root.status, 200);
+      assert.equal(root.headers.get('content-type')?.includes('application/json'), true);
+      assert.equal(rootBody.ok, true);
+      assert.equal(rootBody.service, 'kelyra-api');
+      assert.equal(rootBody.sites.landing, 'https://kelyralabs.com/');
+
+      const consolePage = await fetch(`${api.baseUrl}/console`);
+      const consoleBody = await consolePage.json();
+      assert.equal(consolePage.status, 404);
+      assert.equal(consoleBody.ok, false);
+      assert.equal(consoleBody.error, 'NOT_FOUND');
+    } finally {
+      await api.close();
+    }
+  });
+
   it('builds hosted Forge drafts, exposes preview, and links worker receipts back to the app', async () => {
     const api = await startApi({ runnerMode: 'hosted-worker' });
     try {

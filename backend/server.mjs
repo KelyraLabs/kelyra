@@ -63,6 +63,18 @@ function parseList(value) {
     .filter(Boolean);
 }
 
+function requestHostname(req) {
+  return String(req.headers.host || '')
+    .split(':')[0]
+    .trim()
+    .toLowerCase();
+}
+
+function isApiRequestHost(config, req) {
+  const host = requestHostname(req);
+  return Boolean(host && (host.startsWith('api.') || config.apiHosts.includes(host)));
+}
+
 function safeEqual(a, b) {
   const left = Buffer.from(String(a));
   const right = Buffer.from(String(b));
@@ -280,6 +292,8 @@ export function loadConfig(env = process.env) {
   const storeDirValue = env.KELYRA_STORE_DIR || (production ? '' : '.kelyra-cloud-dev');
   const storeDir = storeDirValue ? resolve(storeDirValue) : '';
   const allowedOrigins = parseList(env.KELYRA_ALLOWED_ORIGINS || DEFAULT_DEV_ORIGINS.join(','));
+  const apiHosts = parseList(env.KELYRA_API_HOSTS || 'api.kelyralabs.com').map((host) => host.toLowerCase());
+  const serveStatic = boolEnv(env.KELYRA_SERVE_STATIC, true);
   const staticDir = resolve(env.KELYRA_STATIC_DIR || join(packageRoot, 'site'));
   const tokenAddress = env.KELYRA_TOKEN_ADDRESS || '';
   const rateLimitPerMinute = Number(env.KELYRA_RATE_LIMIT_PER_MINUTE || 80);
@@ -305,6 +319,7 @@ export function loadConfig(env = process.env) {
     accessCodeHash,
     accessCodeEnabled,
     allowedOrigins,
+    apiHosts,
     apiSecret,
     baseRpcUrl: env.KELYRA_BASE_RPC_URL || 'https://mainnet.base.org',
     cookieSecure: production,
@@ -320,6 +335,7 @@ export function loadConfig(env = process.env) {
     requireTokenHolder: boolEnv(env.KELYRA_REQUIRE_TOKEN_HOLDER, false),
     runnerMode: env.KELYRA_RUNNER_MODE || 'queue-only',
     sessionTtlSeconds: Number(env.KELYRA_SESSION_TTL_SECONDS || DEFAULT_SESSION_TTL_SECONDS),
+    serveStatic,
     staticDir,
     storeDir,
     tierConfig,
@@ -2469,6 +2485,8 @@ function isPathInside(root, target) {
 
 async function serveStatic(config, req, res, url) {
   if (!['GET', 'HEAD'].includes(req.method || 'GET')) return false;
+  if (!config.serveStatic) return false;
+  if (isApiRequestHost(config, req)) return false;
   let pathname;
   try {
     pathname = decodeURIComponent(url.pathname);
@@ -2614,7 +2632,7 @@ export function createKelyraApiServer(options = {}) {
           consoleMode: config.consoleMode,
           runnerMode: config.runnerMode,
           store: config.databaseUrl ? 'postgres' : 'file',
-          static: true,
+          static: config.serveStatic,
           features: {
             consoleMode: config.consoleMode,
             watchOnly: config.consoleMode === 'watch-only',
@@ -2632,6 +2650,31 @@ export function createKelyraApiServer(options = {}) {
         });
         return;
 	      }
+
+      if (req.method === 'GET' && url.pathname === '/' && (!config.serveStatic || isApiRequestHost(config, req))) {
+        json(config, req, res, 200, {
+          ok: true,
+          service: 'kelyra-api',
+          environment: config.environment,
+          consoleMode: config.consoleMode,
+          endpoints: {
+            health: '/api/health',
+            tiers: '/api/tiers',
+            session: '/api/auth/session',
+            quota: '/api/quota/profile',
+            pulse: '/api/pulse',
+            oracle: '/api/oracle/analyze',
+            proofJobs: '/api/proof/jobs',
+            forgeApps: '/api/apps',
+          },
+          sites: {
+            landing: 'https://kelyralabs.com/',
+            console: 'https://console.kelyralabs.com/',
+            docs: 'https://docs.kelyralabs.com/',
+          },
+        });
+        return;
+      }
 
 	      if (req.method === 'GET' && url.pathname === '/api/tiers') {
 	        const session = getSession(config, req);
