@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { detectProviders } from '../config.js';
 import { getCurrentBranch, hasUncommittedChanges, isGitRepo } from '../git.js';
@@ -100,8 +100,27 @@ async function hostedHealth(apiUrl: string | undefined): Promise<DoctorCheck> {
   }
 }
 
-function hasCIWorkflow(): boolean {
-  return existsSync(join(process.cwd(), '.github', 'workflows', 'kelyra-verify.yml'));
+function kelyraCIWorkflowDetail(): string | null {
+  const workflowsDir = join(process.cwd(), '.github', 'workflows');
+  const directWorkflow = join(workflowsDir, 'kelyra-verify.yml');
+  if (existsSync(directWorkflow)) return '.github/workflows/kelyra-verify.yml found';
+
+  if (!existsSync(workflowsDir)) return null;
+
+  try {
+    for (const entry of readdirSync(workflowsDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !/\.(ya?ml)$/i.test(entry.name)) continue;
+      const workflowPath = join(workflowsDir, entry.name);
+      const content = readFileSync(workflowPath, 'utf-8');
+      if (/(?:\bnpx\s+kelyra|\bdist\/cli\.js|\bnode\s+dist\/cli\.js).*?\bverify\s+--ci/s.test(content)) {
+        return `.github/workflows/${entry.name} runs Kelyra CI verification`;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 function renderCheck(check: DoctorCheck): void {
@@ -122,6 +141,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
   const git = isGitRepo();
   const dirty = git ? hasUncommittedChanges() : true;
   const remote = git ? gitRemote() : '';
+  const ciWorkflow = kelyraCIWorkflowDetail();
 
   const checks: DoctorCheck[] = [
     {
@@ -165,10 +185,8 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
     {
       id: 'ci',
       label: 'CI workflow',
-      status: hasCIWorkflow() ? 'pass' : 'warn',
-      detail: hasCIWorkflow()
-        ? '.github/workflows/kelyra-verify.yml found'
-        : 'missing; run kelyra setup-ci --policy-template team',
+      status: ciWorkflow ? 'pass' : 'warn',
+      detail: ciWorkflow || 'missing; run kelyra setup-ci --policy-template team',
     },
     await hostedHealth(options.apiUrl),
   ];
