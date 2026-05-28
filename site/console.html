@@ -4,12 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Kelyra Console</title>
-    <meta name="description" content="Kelyra Console is a watch-only launch preview for verified agent execution, proof history, and holder-gated workflows.">
+    <meta name="description" content="Kelyra Console is the hosted command center preview for verified agent execution, source-backed workflows, and proof archives.">
     <link rel="stylesheet" href="./console.css">
   </head>
   <body>
     <div class="beta-strip">
-      <span>Kelyra Console · watch-only launch preview</span>
+      <span>Kelyra Console Preview</span>
       <a href="./index.html">Back to site</a>
     </div>
 
@@ -63,12 +63,12 @@
             <span class="shell-mark">&gt;_</span>
             <div>
               <strong data-title>Oracle</strong>
-              <small data-workspace-status><i></i><span>Launch preview locked</span></small>
+              <small data-workspace-status><i></i><span>Preview mode</span></small>
             </div>
           </div>
           <div class="top-actions">
             <button type="button" data-new-chat disabled>New Chat</button>
-            <button class="connect" type="button" data-connect disabled>Holder access soon</button>
+            <button class="connect" type="button" data-connect disabled>Preview mode</button>
             <button class="logout" type="button" data-logout hidden>Sign Out</button>
             <a href="./index.html" aria-label="Close console">×</a>
           </div>
@@ -82,7 +82,7 @@
               <div class="stage-head">
                 <span class="avatar">K</span>
                 <p>Oracle</p>
-                <h1>Watch the proof workflow.</h1>
+                <h1>What should we verify?</h1>
               </div>
 
               <div class="prompt-row" aria-label="Example prompts">
@@ -94,13 +94,13 @@
               <div class="transcript" data-transcript>
                 <article class="message agent-message">
                   <span>Kelyra</span>
-                  <p>Kelyra Console is in public watch-only launch mode. Explore the proof workflow now; token-holder chat, Pulse, Forge, and hosted jobs open after the KELYRA gate is enabled.</p>
+                  <p>This public console is a preview of the hosted Kelyra workspace. Active hosted runs are disabled here; use the CLI for live proof work.</p>
                 </article>
               </div>
 
               <form class="composer" data-composer>
                 <button type="button" aria-label="Attach context">⌘</button>
-                <input name="prompt" placeholder="Watch-only launch preview. Holder console opens later." autocomplete="off" disabled>
+                <input name="prompt" placeholder="Preview mode. Run live proof work from the CLI." autocomplete="off" disabled>
                 <button type="submit" aria-label="Send prompt">→</button>
               </form>
             </section>
@@ -109,14 +109,14 @@
               <div class="dock-card dock-primary">
                 <span>Proof runtime</span>
                 <strong data-proof-state>Preview only</strong>
-                <p data-proof-detail>Hosted proof jobs are locked until token-holder access opens. The CLI can still create local receipts.</p>
+                <p data-proof-detail>Hosted proof execution is disabled in this preview. CLI receipts remain fully available.</p>
                 <button type="button" data-run-proof disabled>Run proof</button>
               </div>
 
               <div class="dock-card compact">
                 <span>Agent model</span>
                 <strong data-model-state>Checking</strong>
-                <p data-model-detail>Model-backed preview needs a provider key in the console runtime.</p>
+                <p data-model-detail>Model-backed hosted actions are disabled in this public preview.</p>
               </div>
 
               <div class="receipt-mini">
@@ -145,7 +145,7 @@
             <div class="surface-header">
               <span>Pulse</span>
               <h1>Live Base signal lanes.</h1>
-              <p data-pulse-summary>Pulse is visible as a product preview. Live refresh opens after token-holder access is enabled.</p>
+              <p data-pulse-summary>Preview the source-backed lanes Kelyra uses for Base market discovery.</p>
             </div>
             <div class="pulse-actions">
               <button type="button" data-load-pulse disabled>Refresh Pulse</button>
@@ -176,13 +176,13 @@
           <div class="surface-shell">
             <div class="surface-header">
               <span>App Forge</span>
-              <h1>Build sandboxed browser tools.</h1>
-              <p>Forge is shown as a launch preview. Hosted app builds open after token-holder access is enabled.</p>
+              <h1>Design sandboxed browser tools.</h1>
+              <p>Preview the workflow for generating source-backed app workspaces with SWD proof metadata.</p>
             </div>
             <div class="studio-layout">
               <form class="studio-prompt" data-forge-form>
                 <label for="studio-input">App brief</label>
-                <textarea id="studio-input" data-forge-prompt placeholder="Holder-gated Forge opens after launch." disabled></textarea>
+                <textarea id="studio-input" data-forge-prompt placeholder="Describe a dashboard, scanner, workspace, or proof tool." disabled></textarea>
                 <button type="submit" data-forge-build disabled>Build draft</button>
               </form>
               <div class="studio-side">
@@ -194,7 +194,7 @@
                 <section class="forge-output" data-forge-output>
                   <span>Forge result</span>
                   <strong>No app draft yet</strong>
-                  <p>Holder-gated Forge will create app workspaces, manifests, files, and SWD-backed proof metadata.</p>
+                  <p>App workspaces, manifests, files, and proof metadata appear here in active mode.</p>
                 </section>
               </div>
             </div>
@@ -226,7 +226,7 @@
                 <button type="button" data-forge-load disabled>Refresh</button>
               </div>
               <div class="forge-app-list" data-forge-apps>
-                <p class="empty-state">Forge draft libraries open with token-holder access.</p>
+                <p class="empty-state">Forge draft libraries appear here in active mode.</p>
               </div>
             </section>
           </div>
@@ -258,13 +258,13 @@
             <div class="surface-header compact-header">
               <span>Docs</span>
               <h1>Operator docs</h1>
-              <p>Short references for running Kelyra as a local runtime today and watching the hosted console before holder access opens.</p>
+              <p>Short references for using the CLI runtime and understanding the hosted console boundary.</p>
             </div>
             <div class="docs-list">
               <article><span>Start</span><strong>Local runtime</strong><p>Run <code>kelyra console</code> from the repository you want to inspect.</p><code>kelyra console --port 4340</code></article>
               <article><span>Proof</span><strong>Receipts</strong><p>Create a static proof page or publish the latest receipt to hosted history.</p><code>kelyra proof share latest</code></article>
               <article><span>Policy</span><strong>CI gates</strong><p>Use policy templates and explain CI results before a PR reaches main.</p><code>kelyra ci explain</code></article>
-              <article><span>Hosted</span><strong>Watch-only launch</strong><p>Public console actions are locked until token-holder access opens. Active proof work stays in the CLI for launch.</p><code>KELYRA_CONSOLE_MODE=watch-only</code></article>
+              <article><span>Hosted</span><strong>Console preview</strong><p>This public surface shows the hosted workflow while active proof work stays in the CLI.</p><code>kelyra console</code></article>
             </div>
             <div class="runtime-grid" data-runtime-grid aria-live="polite"></div>
           </div>
@@ -276,8 +276,8 @@
       <form class="auth-card" data-auth-form>
         <button class="auth-close" type="button" data-auth-close aria-label="Close">×</button>
         <span>Hosted beta</span>
-        <h2>Holder access soon</h2>
-        <p data-auth-copy>The public console is currently watch-only. Wallet unlock will open after token-holder access is enabled.</p>
+        <h2>Hosted actions disabled</h2>
+        <p data-auth-copy>Wallet login is not active in this public preview. The preview does not request signatures or wallet permissions.</p>
         <button class="wallet-auth" type="button" data-wallet-auth disabled>Connect Wallet</button>
         <div data-access-code-section>
           <div class="auth-divider"><span>or</span></div>
