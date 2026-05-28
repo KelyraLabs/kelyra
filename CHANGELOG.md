@@ -5,6 +5,13 @@ All notable changes to Kelyra will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Official bundled skills under `skills/official/` for repository work, security review, frontend polish, protocol audits, CI hardening, docs release work, external-agent proof, token launch workflows, smart contract review, and console product review.
+- Official skills are now discovered by `kelyra skills`, validated by `kelyra skills check`, and loadable by name with `-s <skill>`.
+
 ## [0.1.0] - 2026-05-27
 
 ### Added

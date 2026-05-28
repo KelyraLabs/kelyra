@@ -260,7 +260,8 @@ describe('CLI Smoke Tests', () => {
         [cliPath, 'skills', '--json'],
         { cwd: tempDir, env, encoding: 'utf-8' },
       ));
-      assert.deepEqual(listed, []);
+      assert.equal(listed.some((entry: any) => entry.scope === 'official' && entry.id === 'frontend-polish'), true);
+      assert.equal(listed.some((entry: any) => entry.scope === 'official' && entry.id === 'security-review'), true);
 
       const checked = JSON.parse(execFileSync(
         process.execPath,
@@ -268,7 +269,7 @@ describe('CLI Smoke Tests', () => {
         { cwd: tempDir, env, encoding: 'utf-8' },
       ));
       assert.equal(checked.ok, true);
-      assert.equal(checked.checked, 0);
+      assert.equal(checked.checked >= 10, true);
 
       assert.equal(
         existsSync(join(tempDir, '.kelyra')),

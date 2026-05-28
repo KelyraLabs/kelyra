@@ -108,6 +108,8 @@ kelyra receipts publish latest
 | `kelyra setup-ci` | Scaffold GitHub Actions verification |
 | `kelyra verify --ci` | Read-only PR/diff verification without a model key |
 | `kelyra mcp` | Expose SWD and proof tools over MCP stdio |
+| `kelyra skills` | List, inspect, create, and validate project, global, and official skill packs |
+| `kelyra learn` | Generate a repo-local skill from deterministic project signals |
 
 ## Local Files
 
@@ -120,6 +122,18 @@ Kelyra stores project state under `.kelyra/`:
 - `.kelyra/skills/`
 
 User-global state is stored under `~/.kelyra/`.
+
+## Official Skills
+
+Kelyra ships with official `SKILL.md` rule packs under `skills/official/`. They are loaded by name when no project-local or user-global skill with the same id exists.
+
+```bash
+kelyra skills
+kelyra skills show frontend-polish
+kelyra run --file TASK.md -s repo -s security-review
+```
+
+Bundled skills include `repo`, `security-review`, `frontend-polish`, `protocol-audit`, `ci-hardening`, `docs-release`, `agent-proof`, `token-launch`, `smart-contract-review`, and `console-product-review`.
 
 ## Docs
 

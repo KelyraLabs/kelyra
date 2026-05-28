@@ -78,7 +78,7 @@ export interface ReceiptSkill {
   id: string;
   name: string;
   version: string;
-  source: 'project' | 'global' | 'path';
+  source: 'project' | 'global' | 'official' | 'path';
   path?: string;
 }
 

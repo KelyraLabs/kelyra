@@ -20,8 +20,9 @@ For named skills, Kelyra resolves in this order:
 
 1. Project-local: `.kelyra/skills/<name>/SKILL.md`
 2. User-global: `~/.kelyra/skills/<name>/SKILL.md`
+3. Official bundled: `skills/official/<name>/SKILL.md`
 
-Project skills intentionally win over global skills with the same name. A repo can therefore define its own `repo` skill without relying on every developer's home directory.
+Project skills intentionally win over global and official skills with the same name. A repo can therefore define its own `repo` skill without relying on every developer's home directory or the bundled default.
 
 You can also pass an explicit file or directory path:
 
@@ -39,6 +40,7 @@ kelyra skills
 kelyra skills new repo
 kelyra skills new security-review --global
 kelyra skills show repo
+kelyra skills show frontend-polish
 kelyra skills check
 kelyra skills check repo
 ```
@@ -48,6 +50,33 @@ kelyra skills check repo
 `kelyra learn` generates `.kelyra/skills/repo/SKILL.md` from deterministic local repo signals. It looks at docs, package metadata, source directories, CI workflows, config files, tests, command surfaces, and security-sensitive paths. It does not call a model and it does not run project commands. Treat the output as a strong first draft that should be reviewed and edited by the maintainer.
 
 The quality guard is simple: `learn` only writes rules derived from files it can see locally, validates the generated skill format before writing, refuses to overwrite an existing skill unless `--force` is passed, and supports `--dry-run` for review.
+
+## Official Skills
+
+Kelyra ships with official skills for common high-signal workflows. They are bundled with the npm package and appear under the `Official skills` group in `kelyra skills`.
+
+| Skill | Use it for |
+| --- | --- |
+| `repo` | General repository rules and scoped implementation work |
+| `security-review` | Auth, secrets, command execution, CI, deploy, and writable path risk |
+| `frontend-polish` | UI polish, responsive QA, copy fit, and interaction quality |
+| `protocol-audit` | SWD, receipts, proof bundles, policy gates, MCP, and trust assumptions |
+| `ci-hardening` | GitHub Actions, package scripts, release checks, and automation safety |
+| `docs-release` | README, docs, launch copy, install paths, and changelog quality |
+| `agent-proof` | External-agent handoff, model-free SWD applies, and receipt proof |
+| `token-launch` | Token-gated access, wallet login, quotas, tiers, and public launch copy |
+| `smart-contract-review` | Solidity, token contracts, ABIs, viem/ethers calls, and onchain reads |
+| `console-product-review` | Hosted console, proof workflow UX, preview states, and clean routes |
+
+Examples:
+
+```bash
+kelyra run --file TASK.md -s repo -s security-review
+kelyra chat -s frontend-polish -s console-product-review
+kelyra run "review token gate copy" -s token-launch -s docs-release
+```
+
+Official skills are defaults, not lock-in. Add `.kelyra/skills/<name>/SKILL.md` to a repo to override any official skill with project-specific rules.
 
 ## Skill Format
 
@@ -149,3 +178,7 @@ Example skill files live in:
 
 - `docs/examples/skills/repo/SKILL.md`
 - `docs/examples/skills/security-review/SKILL.md`
+
+Official bundled skills live in:
+
+- `skills/official/<name>/SKILL.md`
