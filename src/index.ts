@@ -64,6 +64,7 @@ export {
   ensureSkillsDir,
   getProjectSkillsDir,
   getGlobalSkillsDir,
+  getOfficialSkillsDir,
   getSkillsDir,
   type Skill,
   type SkillMeta,

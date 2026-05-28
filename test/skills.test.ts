@@ -8,6 +8,7 @@ import {
   checkSkills,
   createSkill,
   getGlobalSkillsDir,
+  getOfficialSkillsDir,
   getProjectSkillsDir,
   listSkills,
   loadSkill,
@@ -57,9 +58,38 @@ describe('Skill packs', () => {
     assert.equal(loaded.scope, 'project');
 
     const entries = listSkills().filter((entry) => entry.id === 'repo');
-    assert.equal(entries.length, 2);
+    assert.equal(entries.length, 3);
     assert.equal(entries.find((entry) => entry.scope === 'global')?.shadowed, true);
     assert.equal(entries.find((entry) => entry.scope === 'project')?.shadowed, false);
+    assert.equal(entries.find((entry) => entry.scope === 'official')?.shadowed, true);
+  });
+
+  it('lists and loads bundled official skills without project setup', () => {
+    const entries = listSkills();
+    const official = entries.filter((entry) => entry.scope === 'official');
+
+    assert.equal(official.length >= 10, true);
+    assert.equal(official.some((entry) => entry.id === 'frontend-polish'), true);
+    assert.equal(official.some((entry) => entry.id === 'security-review'), true);
+
+    const loaded = loadSkill('frontend-polish');
+    assert.equal(loaded.scope, 'official');
+    assert.equal(loaded.filePath.startsWith(getOfficialSkillsDir()), true);
+
+    const result = checkSkills();
+    assert.equal(result.ok, true);
+    assert.equal(result.checked >= official.length, true);
+  });
+
+  it('lets project-local skills shadow official skills', () => {
+    createSkill('repo', { scope: 'project' });
+
+    const loaded = loadSkill('repo');
+    assert.equal(loaded.scope, 'project');
+
+    const entries = listSkills().filter((entry) => entry.id === 'repo');
+    assert.equal(entries.some((entry) => entry.scope === 'project' && !entry.shadowed), true);
+    assert.equal(entries.some((entry) => entry.scope === 'official' && entry.shadowed), true);
   });
 
   it('loads explicit skill file paths', () => {
@@ -163,5 +193,14 @@ Move quickly.
       () => buildSkillPrompt('base', ['strict', 'fast']),
       /Skill conflict/,
     );
+  });
+
+  it('builds prompts with official skills by name', () => {
+    const result = buildSkillPrompt('base', ['agent-proof']);
+
+    assert.equal(result.skills.length, 1);
+    assert.equal(result.skills[0]?.scope, 'official');
+    assert.match(result.prompt, /ACTIVE SKILL: agent-proof/);
+    assert.equal(result.requiresTools, true);
   });
 });

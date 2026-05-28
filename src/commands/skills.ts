@@ -4,6 +4,7 @@ import {
   checkSkills,
   createSkill,
   getGlobalSkillsDir,
+  getOfficialSkillsDir,
   getProjectSkillsDir,
   listSkills,
   loadSkill,
@@ -72,13 +73,16 @@ function printSkillsList(asJson?: boolean): void {
   console.log(heading('Kelyra Skills'));
   console.log(`${c.dim}Project:${c.reset} ${formatPath(getProjectSkillsDir())}`);
   console.log(`${c.dim}Global:${c.reset}  ${formatPath(getGlobalSkillsDir())}`);
+  console.log(`${c.dim}Official:${c.reset} ${formatPath(getOfficialSkillsDir())}`);
   console.log();
 
   const project = entries.filter((entry) => entry.scope === 'project');
   const global = entries.filter((entry) => entry.scope === 'global');
+  const official = entries.filter((entry) => entry.scope === 'official');
 
   printSkillGroup('Project skills', project);
   printSkillGroup('Global skills', global);
+  printSkillGroup('Official skills', official);
 
   if (entries.length === 0) {
     info('No skills found yet. Create one with: kelyra skills new repo');

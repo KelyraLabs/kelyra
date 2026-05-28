@@ -5,7 +5,8 @@
 //  Resolution order:
 //    1. Project-local skills: .kelyra/skills/<name>/SKILL.md
 //    2. User-global skills:  ~/.kelyra/skills/<name>/SKILL.md
-//    3. Explicit file or directory paths
+//    3. Official bundled skills: skills/official/<name>/SKILL.md
+//    4. Explicit file or directory paths
 //
 //  Project-local skills intentionally win over global skills. That lets teams
 //  commit a repo operating manual without forcing users to edit their home dir.
@@ -14,8 +15,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { fileURLToPath } from 'node:url';
 
-export type SkillScope = 'project' | 'global' | 'path';
+export type SkillScope = 'project' | 'global' | 'official' | 'path';
+export type WritableSkillScope = 'project' | 'global';
+type NamedSkillScope = Exclude<SkillScope, 'path'>;
 
 export interface SkillMeta {
   name: string;
@@ -68,7 +72,7 @@ export interface SkillCheckResult {
 }
 
 export interface CreateSkillOptions {
-  scope?: Exclude<SkillScope, 'path'>;
+  scope?: WritableSkillScope;
   force?: boolean;
   cwd?: string;
 }
@@ -82,6 +86,9 @@ export interface ParseSkillContentOptions {
 const PROJECT_SKILLS_DIR = path.join('.kelyra', 'skills');
 const GLOBAL_SKILLS_ENV = 'KELYRA_SKILLS_DIR';
 const SKILL_FILE = 'SKILL.md';
+const moduleDir = fileURLToPath(new URL('.', import.meta.url));
+const packageRoot = path.resolve(moduleDir, '..');
+const OFFICIAL_SKILLS_DIR = path.join(packageRoot, 'skills', 'official');
 
 export function getProjectSkillsDir(cwd = process.cwd()): string {
   return path.join(cwd, PROJECT_SKILLS_DIR);
@@ -92,11 +99,15 @@ export function getGlobalSkillsDir(): string {
   return override ? path.resolve(override) : path.join(os.homedir(), '.kelyra', 'skills');
 }
 
+export function getOfficialSkillsDir(): string {
+  return OFFICIAL_SKILLS_DIR;
+}
+
 export function getSkillsDir(): string {
   return getGlobalSkillsDir();
 }
 
-export function ensureSkillsDir(scope: Exclude<SkillScope, 'path'> = 'global', cwd = process.cwd()): string {
+export function ensureSkillsDir(scope: WritableSkillScope = 'global', cwd = process.cwd()): string {
   const dir = scope === 'project' ? getProjectSkillsDir(cwd) : getGlobalSkillsDir();
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -296,12 +307,15 @@ function resolvePathLikeSkill(nameOrPath: string): string {
   return path.join(resolved, SKILL_FILE);
 }
 
-function resolveNamedSkill(name: string): { filePath: string; scope: Exclude<SkillScope, 'path'> } | null {
+function resolveNamedSkill(name: string): { filePath: string; scope: NamedSkillScope } | null {
   const projectPath = path.join(getProjectSkillsDir(), name, SKILL_FILE);
   if (fs.existsSync(projectPath)) return { filePath: projectPath, scope: 'project' };
 
   const globalPath = path.join(getGlobalSkillsDir(), name, SKILL_FILE);
   if (fs.existsSync(globalPath)) return { filePath: globalPath, scope: 'global' };
+
+  const officialPath = path.join(getOfficialSkillsDir(), name, SKILL_FILE);
+  if (fs.existsSync(officialPath)) return { filePath: officialPath, scope: 'official' };
 
   return null;
 }
@@ -352,6 +366,7 @@ export function loadSkill(nameOrPath: string): Skill {
       `Skill not found: ${nameOrPath}\n` +
       `  Project: ${path.join(getProjectSkillsDir(), nameOrPath, SKILL_FILE)}\n` +
       `  Global:  ${path.join(getGlobalSkillsDir(), nameOrPath, SKILL_FILE)}\n` +
+      `  Official:${path.join(getOfficialSkillsDir(), nameOrPath, SKILL_FILE)}\n` +
       `  Create:  kelyra skills new ${nameOrPath}`,
     );
   }
@@ -359,8 +374,12 @@ export function loadSkill(nameOrPath: string): Skill {
   return readSkillFile(resolved.filePath, resolved.scope, nameOrPath);
 }
 
-function listSkillFiles(scope: Exclude<SkillScope, 'path'>): Array<{ id: string; filePath: string; scope: Exclude<SkillScope, 'path'> }> {
-  const root = scope === 'project' ? getProjectSkillsDir() : getGlobalSkillsDir();
+function listSkillFiles(scope: NamedSkillScope): Array<{ id: string; filePath: string; scope: NamedSkillScope }> {
+  const root = scope === 'project'
+    ? getProjectSkillsDir()
+    : scope === 'global'
+    ? getGlobalSkillsDir()
+    : getOfficialSkillsDir();
   if (!fs.existsSync(root)) return [];
 
   return fs.readdirSync(root, { withFileTypes: true })
@@ -376,10 +395,12 @@ function listSkillFiles(scope: Exclude<SkillScope, 'path'>): Array<{ id: string;
 export function listSkills(): SkillListEntry[] {
   const projectFiles = listSkillFiles('project');
   const globalFiles = listSkillFiles('global');
+  const officialFiles = listSkillFiles('official');
   const projectIds = new Set(projectFiles.map((entry) => entry.id));
+  const globalIds = new Set(globalFiles.map((entry) => entry.id));
   const entries: SkillListEntry[] = [];
 
-  for (const entry of [...projectFiles, ...globalFiles]) {
+  for (const entry of [...projectFiles, ...globalFiles, ...officialFiles]) {
     try {
       const skill = readSkillFile(entry.filePath, entry.scope, entry.id);
       entries.push({
@@ -389,7 +410,9 @@ export function listSkills(): SkillListEntry[] {
         version: skill.meta.version,
         path: skill.filePath,
         scope: skill.scope,
-        shadowed: skill.scope === 'global' && projectIds.has(skill.id),
+        shadowed:
+          (skill.scope === 'global' && projectIds.has(skill.id)) ||
+          (skill.scope === 'official' && (projectIds.has(skill.id) || globalIds.has(skill.id))),
       });
     } catch {
       // `skills check` reports malformed skill files. Listing stays usable.
@@ -397,7 +420,13 @@ export function listSkills(): SkillListEntry[] {
   }
 
   return entries.sort((a, b) => {
-    if (a.scope !== b.scope) return a.scope === 'project' ? -1 : 1;
+    const order: Record<SkillScope, number> = {
+      project: 0,
+      global: 1,
+      official: 2,
+      path: 3,
+    };
+    if (a.scope !== b.scope) return order[a.scope] - order[b.scope];
     return a.id.localeCompare(b.id);
   });
 }
@@ -445,7 +474,7 @@ export function checkSkills(nameOrPath?: string): SkillCheckResult {
       });
     }
   } else {
-    for (const entry of [...listSkillFiles('project'), ...listSkillFiles('global')]) {
+    for (const entry of [...listSkillFiles('project'), ...listSkillFiles('global'), ...listSkillFiles('official')]) {
       try {
         skills.push(readSkillFile(entry.filePath, entry.scope, entry.id));
       } catch (err) {

@@ -499,7 +499,7 @@ class ChatSession {
       name: skill.meta.name,
       version: skill.meta.version,
       source: skill.scope,
-      path: skill.scope === 'global' ? undefined : skill.filePath,
+      path: skill.scope === 'project' || skill.scope === 'path' ? skill.filePath : undefined,
     }));
   }
 
