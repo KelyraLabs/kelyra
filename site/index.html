@@ -9,7 +9,7 @@
   </head>
   <body>
     <div class="announcement">
-      <span>Kelyra 0.1 is live on npm.</span>
+      <span>Kelyra 0.1.1 is live on npm.</span>
       <a href="/console">Open Console</a>
       <button type="button" aria-label="Dismiss announcement">×</button>
     </div>
@@ -45,7 +45,7 @@
           </p>
           <div class="hero-actions">
             <button class="command-pill" type="button" data-copy="npm install -g kelyra&#10;kelyra chat">
-              <span>$</span> npm install -g kelyra
+              <span>$</span> npm install -g kelyra · kelyra chat
               <small>⧉</small>
             </button>
             <a class="button secondary" href="/console">Open Console</a>
@@ -342,14 +342,15 @@ Re-read README.md and submit a corrected FILE_ACTION.</code></pre>
       <section id="start" class="band start">
         <div class="section-copy">
           <p class="eyebrow">Quick start</p>
-          <h2>Run Kelyra locally first.</h2>
+          <h2>Install it. Run chat. Verify the work.</h2>
         </div>
         <div class="command-block">
-          <button class="copy-button" type="button" data-copy="npm install -g kelyra&#10;kelyra doctor&#10;kelyra providers check&#10;kelyra console">Copy</button>
-          <pre><code>npm install -g kelyra
-kelyra doctor
-kelyra providers check
-kelyra console</code></pre>
+          <button class="copy-button" type="button" data-copy="npm install -g kelyra&#10;kelyra chat&#10;&#10;# try without installing&#10;npx kelyra@latest chat&#10;&#10;# inspect setup&#10;kelyra doctor">Copy</button>
+          <pre><code>Install: npm install -g kelyra
+Run:     kelyra chat
+
+No install: npx kelyra@latest chat
+Check:      kelyra doctor</code></pre>
         </div>
       </section>
     </main>
