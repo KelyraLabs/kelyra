@@ -25,6 +25,29 @@ announcementClose?.addEventListener('click', () => {
   document.querySelector('.announcement')?.remove();
 });
 
+const menuToggle = document.querySelector('[data-menu-toggle]');
+const siteHeader = document.querySelector('.site-header');
+const siteNav = document.querySelector('[data-site-nav]');
+
+function setMenuOpen(open) {
+  siteHeader?.classList.toggle('is-menu-open', open);
+  document.body.classList.toggle('menu-open', open);
+  menuToggle?.setAttribute('aria-expanded', String(open));
+  menuToggle?.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+}
+
+menuToggle?.addEventListener('click', () => {
+  setMenuOpen(!siteHeader?.classList.contains('is-menu-open'));
+});
+
+siteNav?.addEventListener('click', (event) => {
+  if (event.target instanceof Element && event.target.closest('a')) setMenuOpen(false);
+});
+
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') setMenuOpen(false);
+});
+
 const demoTabs = document.querySelectorAll('[data-demo-tab]');
 const demoPanels = document.querySelectorAll('[data-demo-panel]');
 

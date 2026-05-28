@@ -71,11 +71,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kelyra-labs/kelyra.git"
+    "url": "git+https://github.com/KelyraLabs/kelyra.git"
   },
-  "homepage": "https://github.com/kelyra-labs/kelyra",
+  "homepage": "https://github.com/KelyraLabs/kelyra",
   "bugs": {
-    "url": "https://github.com/kelyra-labs/kelyra/issues"
+    "url": "https://github.com/KelyraLabs/kelyra/issues"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
