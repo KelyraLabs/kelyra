@@ -1,7 +1,7 @@
 # Kelyra Hosted API
 
-This is the public backend boundary for Kelyra Console. It is intentionally
-separate from the local CLI bridge in `site/server.mjs`.
+This is the public backend boundary for Kelyra Console. The UI is intentionally
+kept in separate Vercel repositories; this repo serves API JSON only.
 
 ## Live Rules
 
@@ -43,7 +43,6 @@ Optional:
 
 ```bash
 KELYRA_STORE_DIR=/var/lib/kelyra-api
-KELYRA_STATIC_DIR=/app/site
 KELYRA_PUBLIC_BASE_URL=https://kelyra.example
 KELYRA_DATABASE_SSL=false
 KELYRA_CONSOLE_MODE=watch-only
@@ -78,10 +77,10 @@ disk for a public launch.
 Use it only for a gated preflight. `KELYRA_RUNNER_MODE=hosted-worker` lets the
 worker service claim queued jobs and write hosted receipts.
 
-`KELYRA_CONSOLE_MODE=watch-only` exposes public config, tiers, quota profile,
-and static console pages while blocking hosted chat, Pulse refresh, auth login,
-proof jobs, Forge builds, and hosted data routes. Set `KELYRA_CONSOLE_MODE=active`
-only when auth, quotas, and worker isolation are ready.
+`KELYRA_CONSOLE_MODE=watch-only` exposes public config, tiers, and quota profile
+while blocking hosted chat, Pulse refresh, auth login, proof jobs, Forge builds,
+and hosted data routes. Set `KELYRA_CONSOLE_MODE=active` only when auth, quotas,
+and worker isolation are ready.
 
 `KELYRA_REQUIRE_TOKEN_HOLDER=true` makes wallet login check the configured ERC-20
 balance on Base. Leave it `false` until the KELYRA contract address is final,
@@ -171,6 +170,5 @@ KELYRA_SMOKE_BASE_URL=http://127.0.0.1:4350 npm run backend:smoke
 - `GET /api/apps/:slug/assets/:file`
 - `GET /api/apps/:slug/preview`
 
-Static landing, console, and docs are intended to be hosted separately on Vercel.
-Keep Railway on `api.kelyralabs.com` with `KELYRA_SERVE_STATIC=false`; use the
-local `site/` directory only for development or emergency single-service preview.
+Static landing, console, and docs are hosted separately on Vercel. Keep Railway
+on `api.kelyralabs.com`; this API service does not include UI HTML.

@@ -715,30 +715,28 @@ describe('Kelyra hosted API', () => {
     }
   });
 
-  it('serves the public console from the hosted backend', async () => {
+  it('does not serve UI HTML from the hosted backend', async () => {
     const api = await startApi();
     try {
       const response = await fetch(`${api.baseUrl}/console`);
-      const body = await response.text();
-      assert.equal(response.status, 200);
-      assert.match(response.headers.get('content-type') || '', /text\/html/);
-      assert.match(body, /Kelyra Console/);
-      assert.match(body, /data-logout/);
-      assert.match(body, /data-forge-revise/);
-      assert.match(body, /data-forge-publish/);
-      assert.match(body, /data-forge-delete/);
-      assert.match(body, /data-runtime-grid/);
+      const body = await response.json();
+      assert.equal(response.status, 404);
+      assert.equal(response.headers.get('content-type')?.includes('application/json'), true);
+      assert.equal(body.ok, false);
+      assert.equal(body.error, 'NOT_FOUND');
 
       const legacy = await fetch(`${api.baseUrl}/console.html`, { redirect: 'manual' });
-      assert.equal(legacy.status, 308);
-      assert.equal(legacy.headers.get('location'), '/console');
+      const legacyBody = await legacy.json();
+      assert.equal(legacy.status, 404);
+      assert.equal(legacyBody.ok, false);
+      assert.equal(legacyBody.error, 'NOT_FOUND');
     } finally {
       await api.close();
     }
   });
 
-  it('can run Railway as an API-only service without serving website HTML', async () => {
-    const api = await startApi({ env: { KELYRA_SERVE_STATIC: 'false' } });
+  it('runs Railway as an API-only service without serving website HTML', async () => {
+    const api = await startApi();
     try {
       const health = await fetch(`${api.baseUrl}/api/health`);
       const healthBody = await health.json();

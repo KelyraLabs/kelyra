@@ -1,13 +1,11 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { extname, join, relative, resolve } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPublicClient, erc20Abi, formatUnits, http, isAddress, parseUnits, verifyMessage } from 'viem';
 import { base } from 'viem/chains';
 
-const moduleDir = fileURLToPath(new URL('.', import.meta.url));
-const packageRoot = resolve(moduleDir, '..');
 const MAX_BODY_BYTES = 64 * 1024;
 const DEFAULT_DEV_ORIGINS = ['http://127.0.0.1:4340', 'http://localhost:4340'];
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -31,22 +29,6 @@ const mimeTypes = new Map([
   ['.jpg', 'image/jpeg'],
   ['.jpeg', 'image/jpeg'],
   ['.svg', 'image/svg+xml'],
-]);
-
-const cleanStaticRoutes = new Map([
-  ['/console', '/console.html'],
-  ['/protocol', '/protocol.html'],
-  ['/tiers', '/tiers.html'],
-]);
-
-const staticRouteRedirects = new Map([
-  ['/index.html', '/'],
-  ['/console.html', '/console'],
-  ['/protocol.html', '/protocol'],
-  ['/tiers.html', '/tiers'],
-  ['/console/', '/console'],
-  ['/protocol/', '/protocol'],
-  ['/tiers/', '/tiers'],
 ]);
 
 function sha256(value) {
@@ -294,8 +276,7 @@ export function loadConfig(env = process.env) {
   const storeDir = storeDirValue ? resolve(storeDirValue) : '';
   const allowedOrigins = parseList(env.KELYRA_ALLOWED_ORIGINS || DEFAULT_DEV_ORIGINS.join(','));
   const apiHosts = parseList(env.KELYRA_API_HOSTS || 'api.kelyralabs.com').map((host) => host.toLowerCase());
-  const serveStatic = boolEnv(env.KELYRA_SERVE_STATIC, true);
-  const staticDir = resolve(env.KELYRA_STATIC_DIR || join(packageRoot, 'site'));
+  const serveStatic = false;
   const tokenAddress = env.KELYRA_TOKEN_ADDRESS || KELYRA_TOKEN_ADDRESS;
   const rateLimitPerMinute = Number(env.KELYRA_RATE_LIMIT_PER_MINUTE || 80);
   const tierConfig = buildTierConfig(env, rateLimitPerMinute);
@@ -337,7 +318,6 @@ export function loadConfig(env = process.env) {
     runnerMode: env.KELYRA_RUNNER_MODE || 'queue-only',
     sessionTtlSeconds: Number(env.KELYRA_SESSION_TTL_SECONDS || DEFAULT_SESSION_TTL_SECONDS),
     serveStatic,
-    staticDir,
     storeDir,
     tierConfig,
     tokenAddress,
@@ -1895,16 +1875,6 @@ function responseHeaders(config, req, extra = {}) {
   };
 }
 
-function staticHeaders(contentType) {
-  return {
-    'cache-control': 'no-store, max-age=0',
-    'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
-    'content-type': contentType,
-    'referrer-policy': 'no-referrer',
-    'x-content-type-options': 'nosniff',
-  };
-}
-
 function previewHeaders() {
   return {
     'cache-control': 'no-store',
@@ -2648,50 +2618,6 @@ async function hostedDataQuery(input, context) {
   };
 }
 
-function isPathInside(root, target) {
-  const rel = relative(root, target);
-  return Boolean(rel) && !rel.startsWith('..') && !resolve(rel).startsWith('..');
-}
-
-async function serveStatic(config, req, res, url) {
-  if (!['GET', 'HEAD'].includes(req.method || 'GET')) return false;
-  if (!config.serveStatic) return false;
-  if (isApiRequestHost(config, req)) return false;
-  let pathname;
-  try {
-    pathname = decodeURIComponent(url.pathname);
-  } catch {
-    return false;
-  }
-
-  const cleanTarget = staticRouteRedirects.get(pathname);
-  if (cleanTarget) {
-    res.writeHead(308, {
-      location: `${cleanTarget}${url.search || ''}`,
-      'cache-control': 'no-store',
-    });
-    res.end();
-    return true;
-  }
-
-  if (pathname === '/') pathname = '/index.html';
-  if (cleanStaticRoutes.has(pathname)) pathname = cleanStaticRoutes.get(pathname);
-  if (pathname.endsWith('/')) pathname = `${pathname}index.html`;
-
-  const filePath = resolve(config.staticDir, `.${pathname}`);
-  if (!isPathInside(config.staticDir, filePath)) return false;
-
-  try {
-    const content = await readFile(filePath);
-    const type = mimeTypes.get(extname(filePath).toLowerCase()) || 'application/octet-stream';
-    res.writeHead(200, staticHeaders(type));
-    res.end(req.method === 'HEAD' ? undefined : content);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function getOwnedApp(store, session, slug) {
   const app = await store.getForgeApp(slug);
   if (!app || app.ownerSub !== session.sub) return null;
@@ -3283,8 +3209,6 @@ export function createKelyraApiServer(options = {}) {
         json(config, req, res, 404, { ok: false, error: 'NOT_FOUND' });
         return;
       }
-
-      if (await serveStatic(config, req, res, url)) return;
 
       json(config, req, res, 404, { ok: false, error: 'NOT_FOUND' });
     } catch (err) {

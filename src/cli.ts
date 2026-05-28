@@ -367,9 +367,7 @@ program
 
 program
   .command('console')
-  .description('Run the local Kelyra Console bridge for SWD proof runs')
-  .option('--port <n>', 'Local console port', '4340')
-  .option('--host <host>', 'Local console host', '127.0.0.1')
+  .description('Show hosted Kelyra Console, Docs, and API endpoints')
   .action(consoleCommand);
 
 program
