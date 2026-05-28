@@ -97,10 +97,18 @@ a {
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0;
+  gap: 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 18px;
   font-weight: 800;
+}
+
+.brand-logo {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 14px rgba(125, 233, 240, 0.24));
 }
 
 .brand-k {

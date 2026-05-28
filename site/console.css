@@ -136,7 +136,14 @@ textarea:disabled {
   letter-spacing: 0;
 }
 
-.console-brand span,
+.console-logo {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 16px rgba(125, 233, 240, 0.26));
+}
+
 .avatar {
   display: grid;
   place-items: center;
@@ -146,11 +153,6 @@ textarea:disabled {
   color: var(--cyan);
   font-weight: 900;
   box-shadow: 0 0 32px rgba(125, 233, 240, 0.08);
-}
-
-.console-brand span {
-  width: 34px;
-  height: 34px;
 }
 
 .command-nav {
