@@ -5,7 +5,7 @@ const fallbackTiers = {
   token: {
     chainId: 8453,
     symbol: 'KELYRA',
-    address: null,
+    address: '0x3A82695D24a2B9359eC1B4B6DA7781a18e2C587C',
   },
   quotaTypes: [
     {

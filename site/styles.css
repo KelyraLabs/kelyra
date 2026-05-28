@@ -276,6 +276,15 @@ h3 {
   margin: 34px 0 18px;
 }
 
+.contract-line {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: min(100%, 720px);
+  margin: 0 auto 18px;
+}
+
 .button {
   display: inline-flex;
   align-items: center;
@@ -323,6 +332,48 @@ h3 {
 .command-pill small {
   color: #575361;
   font-size: 14px;
+}
+
+.contract-pill,
+.contract-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 1px solid rgba(125, 233, 240, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.022);
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+
+.contract-pill {
+  gap: 10px;
+  max-width: min(100%, 590px);
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.contract-pill span {
+  color: var(--cyan);
+  font-weight: 850;
+}
+
+.contract-pill code {
+  max-width: min(58vw, 430px);
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contract-pill small {
+  color: #575361;
+}
+
+.contract-link {
+  padding: 0 14px;
 }
 
 .access-strip {
@@ -1549,6 +1600,7 @@ body::before {
   }
 
   .hero-actions,
+  .contract-line,
   .access-strip,
   .hero-badges {
     align-items: stretch;
@@ -1557,10 +1609,16 @@ body::before {
   }
 
   .command-pill,
+  .contract-pill,
+  .contract-link,
   .button,
   .access-strip {
     justify-content: center;
     width: 100%;
+  }
+
+  .contract-pill code {
+    max-width: 70vw;
   }
 
   .terminal-shell {

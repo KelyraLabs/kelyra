@@ -14,7 +14,8 @@ const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 12;
 const DEXSCREENER_BASE = 'https://api.dexscreener.com';
 const DEX_CACHE_TTL_MS = 120_000;
 const EXPLORER_CACHE_TTL_MS = 180_000;
-const KELYRA_REFERENCE_TOKEN_ADDRESS = '0x4200000000000000000000000000000000000006';
+const KELYRA_TOKEN_ADDRESS = '0x3A82695D24a2B9359eC1B4B6DA7781a18e2C587C';
+const KELYRA_REFERENCE_TOKEN_ADDRESS = KELYRA_TOKEN_ADDRESS;
 const BASE_CHAIN_ID = 8453;
 const dexCache = new Map();
 const explorerCache = new Map();
@@ -119,7 +120,7 @@ function buildTierConfig(env, rateLimitPerMinute) {
     token: {
       chainId: BASE_CHAIN_ID,
       symbol: tokenSymbol,
-      address: env.KELYRA_TOKEN_ADDRESS || null,
+      address: env.KELYRA_TOKEN_ADDRESS || KELYRA_TOKEN_ADDRESS,
     },
     quotaTypes: [
       {
@@ -295,7 +296,7 @@ export function loadConfig(env = process.env) {
   const apiHosts = parseList(env.KELYRA_API_HOSTS || 'api.kelyralabs.com').map((host) => host.toLowerCase());
   const serveStatic = boolEnv(env.KELYRA_SERVE_STATIC, true);
   const staticDir = resolve(env.KELYRA_STATIC_DIR || join(packageRoot, 'site'));
-  const tokenAddress = env.KELYRA_TOKEN_ADDRESS || '';
+  const tokenAddress = env.KELYRA_TOKEN_ADDRESS || KELYRA_TOKEN_ADDRESS;
   const rateLimitPerMinute = Number(env.KELYRA_RATE_LIMIT_PER_MINUTE || 80);
   const tierConfig = buildTierConfig(env, rateLimitPerMinute);
 
