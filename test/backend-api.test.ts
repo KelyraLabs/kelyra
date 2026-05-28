@@ -690,7 +690,7 @@ describe('Kelyra hosted API', () => {
   it('serves the public console from the hosted backend', async () => {
     const api = await startApi();
     try {
-      const response = await fetch(`${api.baseUrl}/console.html`);
+      const response = await fetch(`${api.baseUrl}/console`);
       const body = await response.text();
       assert.equal(response.status, 200);
       assert.match(response.headers.get('content-type') || '', /text\/html/);
@@ -700,6 +700,10 @@ describe('Kelyra hosted API', () => {
       assert.match(body, /data-forge-publish/);
       assert.match(body, /data-forge-delete/);
       assert.match(body, /data-runtime-grid/);
+
+      const legacy = await fetch(`${api.baseUrl}/console.html`, { redirect: 'manual' });
+      assert.equal(legacy.status, 308);
+      assert.equal(legacy.headers.get('location'), '/console');
     } finally {
       await api.close();
     }
