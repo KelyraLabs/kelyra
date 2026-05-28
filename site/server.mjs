@@ -38,6 +38,22 @@ const mimeTypes = new Map([
   ['.svg', 'image/svg+xml'],
 ]);
 
+const cleanStaticRoutes = new Map([
+  ['/console', '/console.html'],
+  ['/protocol', '/protocol.html'],
+  ['/tiers', '/tiers.html'],
+]);
+
+const staticRouteRedirects = new Map([
+  ['/index.html', '/'],
+  ['/console.html', '/console'],
+  ['/protocol.html', '/protocol'],
+  ['/tiers.html', '/tiers'],
+  ['/console/', '/console'],
+  ['/protocol/', '/protocol'],
+  ['/tiers/', '/tiers'],
+]);
+
 function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
 }
@@ -1144,7 +1160,18 @@ async function serveForgeStatic(url, res) {
 
 async function serveStatic(req, res) {
   const url = new URL(req.url || '/', `http://${host}:${port}`);
-  const requested = url.pathname === '/' ? '/index.html' : url.pathname;
+  const cleanTarget = staticRouteRedirects.get(url.pathname);
+  if (cleanTarget) {
+    res.writeHead(308, {
+      location: `${cleanTarget}${url.search || ''}`,
+      'cache-control': 'no-store',
+    });
+    res.end();
+    return;
+  }
+
+  const routePath = cleanStaticRoutes.get(url.pathname) || url.pathname;
+  const requested = routePath === '/' ? '/index.html' : routePath;
   const normalized = normalize(decodeURIComponent(requested)).replace(/^(\.\.[/\\])+/, '');
   const filePath = resolve(siteDir, `.${normalized}`);
 
@@ -1239,6 +1266,6 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`Kelyra Console local bridge running at http://${host}:${port}/console.html`);
+  console.log(`Kelyra Console local bridge running at http://${host}:${port}/console`);
   console.log(`Workspace: ${workspaceRoot}`);
 });

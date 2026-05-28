@@ -19,7 +19,7 @@ export async function consoleCommand(options: ConsoleOptions = {}): Promise<void
 
   const host = options.host || '127.0.0.1';
   const port = options.port || '4340';
-  const url = `http://${host}:${port}/console.html`;
+  const url = `http://${host}:${port}/console`;
 
   console.log(`${c.cyan}${c.bold}Kelyra Console${c.reset}`);
   console.log(`${c.dim}Local proof runtime for SWD receipts and proof bundles.${c.reset}`);

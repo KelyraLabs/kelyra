@@ -32,6 +32,22 @@ const mimeTypes = new Map([
   ['.svg', 'image/svg+xml'],
 ]);
 
+const cleanStaticRoutes = new Map([
+  ['/console', '/console.html'],
+  ['/protocol', '/protocol.html'],
+  ['/tiers', '/tiers.html'],
+]);
+
+const staticRouteRedirects = new Map([
+  ['/index.html', '/'],
+  ['/console.html', '/console'],
+  ['/protocol.html', '/protocol'],
+  ['/tiers.html', '/tiers'],
+  ['/console/', '/console'],
+  ['/protocol/', '/protocol'],
+  ['/tiers/', '/tiers'],
+]);
+
 function sha256(value) {
   return createHash('sha256').update(String(value)).digest('hex');
 }
@@ -2460,8 +2476,18 @@ async function serveStatic(config, req, res, url) {
     return false;
   }
 
+  const cleanTarget = staticRouteRedirects.get(pathname);
+  if (cleanTarget) {
+    res.writeHead(308, {
+      location: `${cleanTarget}${url.search || ''}`,
+      'cache-control': 'no-store',
+    });
+    res.end();
+    return true;
+  }
+
   if (pathname === '/') pathname = '/index.html';
-  if (pathname === '/console') pathname = '/console.html';
+  if (cleanStaticRoutes.has(pathname)) pathname = cleanStaticRoutes.get(pathname);
   if (pathname.endsWith('/')) pathname = `${pathname}index.html`;
 
   const filePath = resolve(config.staticDir, `.${pathname}`);
