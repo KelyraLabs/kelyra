@@ -11,7 +11,8 @@ git clone https://github.com/kelyra-labs/kelyra.git
 cd kelyra
 npm install
 cp .env.example .env
-# Add your ANTHROPIC_API_KEY to .env
+# Optional for model-backed chat/run:
+# add ANTHROPIC_API_KEY, OPENAI_API_KEY, or DEEPSEEK_API_KEY to .env
 ```
 
 ### Dev Mode (no build step)
@@ -36,10 +37,10 @@ npx tsc --noEmit              # type check only
 
 Read [AGENTS.md](./AGENTS.md) before writing any code. The non-negotiable rules:
 
-1. **Zero runtime dependencies** beyond `@anthropic-ai/sdk` and `commander`
+1. **Keep runtime dependencies deliberate** — new packages need a clear reason and maintenance/security review
 2. **ESM only** — no `require()`, no CommonJS
 3. **Vanilla ANSI** — no chalk, no ink, no color libraries
-4. **All config in `src/config.ts`** — system prompt, budget defaults, pricing, model ID
+4. **Core config in `src/config.ts`** — system prompt, budget defaults, pricing, model IDs, and provider readiness
 5. **Dry-run safety** — every filesystem write must respect the `dryRun` flag
 
 ---

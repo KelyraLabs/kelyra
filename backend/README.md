@@ -9,7 +9,7 @@ separate from the local CLI bridge in `site/server.mjs`.
 - Local CLI bridge routes use `/api/local/*`.
 - The hosted API never executes a user's local filesystem directly.
 - Production defaults to `KELYRA_CONSOLE_MODE=watch-only`; active hosted console
-  routes should open only after token-holder access is ready.
+  routes should open only after auth, quotas, and worker isolation are ready.
 - Proof execution must go through an authenticated job and an isolated runner.
 - Provider keys, runner secrets, and signing keys stay server-side only.
 
@@ -79,7 +79,7 @@ worker service claim queued jobs and write hosted receipts.
 `KELYRA_CONSOLE_MODE=watch-only` exposes public config, tiers, quota profile,
 and static console pages while blocking hosted chat, Pulse refresh, auth login,
 proof jobs, Forge builds, and hosted data routes. Set `KELYRA_CONSOLE_MODE=active`
-only when holder access and quotas are ready.
+only when auth, quotas, and worker isolation are ready.
 
 `KELYRA_REQUIRE_TOKEN_HOLDER=true` makes wallet login check the configured ERC-20
 balance on Base. The wallet tier is selected from the configured token thresholds:

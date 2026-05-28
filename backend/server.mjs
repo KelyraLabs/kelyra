@@ -1787,7 +1787,7 @@ function requireConsoleActive(config, req, res) {
     ok: false,
     error: 'CONSOLE_WATCH_ONLY',
     consoleMode: config.consoleMode,
-    message: 'Kelyra Console is watch-only during launch. Active hosted actions open after token-holder access is enabled.',
+    message: 'Kelyra Console is in public preview. Active hosted actions are disabled in this mode.',
   });
   return false;
 }
