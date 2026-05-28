@@ -11,6 +11,8 @@ separate from the local CLI bridge in `site/server.mjs`.
 - Production defaults to `KELYRA_CONSOLE_MODE=watch-only`; active hosted console
   routes should open only after auth, quotas, and worker isolation are ready.
 - Proof execution must go through an authenticated job and an isolated runner.
+- Wallet login uses a nonce plus `personal_sign`; it never asks for approvals,
+  transactions, or spending permission.
 - Provider keys, runner secrets, and signing keys stay server-side only.
 
 ## Development
@@ -82,12 +84,15 @@ proof jobs, Forge builds, and hosted data routes. Set `KELYRA_CONSOLE_MODE=activ
 only when auth, quotas, and worker isolation are ready.
 
 `KELYRA_REQUIRE_TOKEN_HOLDER=true` makes wallet login check the configured ERC-20
-balance on Base. The wallet tier is selected from the configured token thresholds:
-Basic, Core, Pro, or Ultimate. Keep `KELYRA_ACCESS_CODE_SHA256` available only
-for internal beta users or emergency access. Access-code sessions use the hidden
-`operator` tier by default so internal smoke tests do not spend public holder quota.
-Set `KELYRA_ACCESS_CODE_ENABLED=false` before public wallet-only launch if beta
-codes should be unavailable from the API and hidden from the console.
+balance on Base. Leave it `false` until the KELYRA contract address is final,
+then set both `KELYRA_TOKEN_ADDRESS=<base-erc20-contract-address>` and
+`KELYRA_REQUIRE_TOKEN_HOLDER=true`. The wallet tier is selected from the
+configured token thresholds: Basic, Core, Pro, or Ultimate. Keep
+`KELYRA_ACCESS_CODE_SHA256` available only for internal beta users or emergency
+access. Access-code sessions use the hidden `operator` tier by default so
+internal smoke tests do not spend public holder quota. Set
+`KELYRA_ACCESS_CODE_ENABLED=false` before public wallet-only launch if beta codes
+should be unavailable from the API and hidden from the console.
 
 Daily quotas are served from `/api/tiers` and enforced by the backend. Wallet
 sessions start on fresh quota unless yesterday's UTC holder snapshot already met
@@ -137,6 +142,8 @@ KELYRA_SMOKE_BASE_URL=http://127.0.0.1:4350 npm run backend:smoke
 ## Current Endpoints
 
 - `GET /api/health`
+- `GET /api/docs`
+- `GET /openapi.json`
 - `GET /api/tiers`
 - `GET /api/quota/profile`
 - `GET /api/pulse`
@@ -146,6 +153,7 @@ KELYRA_SMOKE_BASE_URL=http://127.0.0.1:4350 npm run backend:smoke
 - `POST /api/auth/wallet/nonce`
 - `POST /api/auth/wallet/verify`
 - `POST /api/auth/logout`
+- `GET /api/data`
 - `POST /api/data`
 - `POST /api/proof/jobs`
 - `GET /api/proof/jobs`
@@ -153,6 +161,8 @@ KELYRA_SMOKE_BASE_URL=http://127.0.0.1:4350 npm run backend:smoke
 - `GET /api/receipts`
 - `POST /api/receipts/import` with `Authorization: Bearer $KELYRA_API_SECRET`
 - `GET /api/apps`
+- `GET /api/apps/gallery`
+- `GET /api/apps/public`
 - `POST /api/apps/build`
 - `GET /api/apps/:slug`
 - `PATCH /api/apps/:slug`
@@ -161,5 +171,6 @@ KELYRA_SMOKE_BASE_URL=http://127.0.0.1:4350 npm run backend:smoke
 - `GET /api/apps/:slug/assets/:file`
 - `GET /api/apps/:slug/preview`
 
-Static landing and console files are served by the same backend process from
-`site/` by default, so a single Railway web service can host the phase-2 MVP.
+Static landing, console, and docs are intended to be hosted separately on Vercel.
+Keep Railway on `api.kelyralabs.com` with `KELYRA_SERVE_STATIC=false`; use the
+local `site/` directory only for development or emergency single-service preview.
