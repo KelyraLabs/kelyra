@@ -57,6 +57,7 @@ const runProofButton = document.querySelector('[data-run-proof]');
 const loadPulseButton = document.querySelector('[data-load-pulse]');
 const forgeBuildButton = document.querySelector('[data-forge-build]');
 const forgeLoadButton = document.querySelector('[data-forge-load]');
+const consoleMenuToggle = document.querySelector('[data-console-menu-toggle]');
 
 const titles = {
   chat: 'Oracle',
@@ -109,6 +110,28 @@ function blockWatchOnly() {
   showToast(watchOnlyMessage());
   return true;
 }
+
+function setConsoleMenuOpen(open) {
+  document.body.classList.toggle('console-menu-open', open);
+  consoleMenuToggle?.setAttribute('aria-expanded', String(open));
+  consoleMenuToggle?.setAttribute('aria-label', open ? 'Close workspace menu' : 'Open workspace menu');
+}
+
+consoleMenuToggle?.addEventListener('click', () => {
+  setConsoleMenuOpen(!document.body.classList.contains('console-menu-open'));
+});
+
+document.addEventListener('click', (event) => {
+  if (!document.body.classList.contains('console-menu-open')) return;
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  if (target.closest('.sidebar') || target.closest('[data-console-menu-toggle]')) return;
+  setConsoleMenuOpen(false);
+});
+
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') setConsoleMenuOpen(false);
+});
 
 function applyConsoleModeUi() {
   const watchOnly = isWatchOnly();
@@ -1607,6 +1630,7 @@ for (const button of navButtons) {
     if (section === 'studio' && !state.forgeLoaded && !isWatchOnly()) {
       loadForgeApps(true).catch(() => {});
     }
+    setConsoleMenuOpen(false);
   });
 }
 

@@ -15,7 +15,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:image" content="https://docs.kelyralabs.com/assets/kelyra-preview.png">
     <link rel="icon" type="image/png" href="./favicon.png">
-    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./styles.css?v=0.1.5-mobile">
   </head>
   <body>
     <header class="site-header">
@@ -23,7 +23,12 @@
         <img class="brand-logo" src="./assets/kelyra-logo.png" alt="" aria-hidden="true">
         <span class="brand-k">kelyra</span>
       </a>
-      <nav class="nav" aria-label="Primary navigation">
+      <button class="menu-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="site-nav" data-menu-toggle>
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <nav class="nav" id="site-nav" aria-label="Primary navigation" data-site-nav>
         <a href="/#features">Product</a>
         <a href="/protocol">Protocol</a>
         <a href="/tiers">Tiers</a>
@@ -93,6 +98,6 @@
       <span>Hosted tiers are enforced by the API. Local CLI runs stay user-controlled.</span>
     </footer>
 
-    <script src="./tiers.js"></script>
+    <script src="./tiers.js?v=0.1.5-mobile"></script>
   </body>
 </html>
